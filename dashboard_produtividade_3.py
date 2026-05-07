@@ -107,10 +107,14 @@ st.markdown(f"""
     }}
     .stApp {{ background-color: {COLORS["bg"]} !important; }}
 
-    /* Oculta elementos nativos do Streamlit */
-    #MainMenu, footer, header {{ visibility: hidden; }}
+    /* Oculta elementos nativos do Streamlit — mantém o toggle da sidebar */
+    #MainMenu {{ visibility: hidden; }}
+    footer {{ visibility: hidden; }}
+    /* Oculta só o conteúdo interno do header (logo, deploy), mas mantém o toggle */
+    header[data-testid="stHeader"] {{ background: transparent !important; }}
+    header[data-testid="stHeader"] > div:first-child {{ visibility: hidden; }}
     .block-container {{
-        padding-top: 0 !important;
+        padding-top: 0.5rem !important;
         padding-bottom: 1rem !important;
         max-width: 100% !important;
     }}
@@ -128,13 +132,14 @@ st.markdown(f"""
     .topbar {{
         position: relative;
         background: {COLORS["header_grad"]};
-        padding: 0 28px;
-        height: 58px;
+        padding: 0 24px;
+        height: 56px;
         display: flex;
         align-items: center;
         justify-content: space-between;
-        margin: -1rem -1rem 20px -1rem;   /* cola nas bordas */
-        border-bottom: 1px solid rgba(255,255,255,0.12);
+        border-radius: 10px;
+        margin-bottom: 16px;
+        border: none;
         box-shadow: 0 2px 12px rgba(26,58,107,0.18);
     }}
     .topbar-left {{
@@ -201,10 +206,6 @@ st.markdown(f"""
         box-shadow: 2px 0 8px rgba(26,58,107,0.06);
     }}
     section[data-testid="stSidebar"] * {{ color: {COLORS["text"]} !important; }}
-    section[data-testid="stSidebar"] > div {{
-        padding-top: 0 !important;
-    }}
-
     /* Linha de destaque no topo da sidebar */
     section[data-testid="stSidebar"]::before {{
         content: '';
