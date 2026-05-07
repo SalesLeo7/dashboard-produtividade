@@ -711,7 +711,7 @@ with tab1:
 
     with col2:
         section("Status por Faixa Horária")
-        status_cor = {"🔥 Pico": COLORS["danger"], "🕳️ Vale": COLORS["warning"], "OK": COLORS["success"]}
+        status_cor = {"🔥 Pico": COLORS["danger"], "🕳️ Vale": COLORS["warning"], "✅ OK": COLORS["success"]}
         fig_st = px.bar(
             gargalo, x="event_count", y="time_hour_interval", color="status",
             orientation="h", category_orders={"time_hour_interval": ordem},
