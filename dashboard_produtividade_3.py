@@ -95,6 +95,7 @@ PLOTLY_LAYOUT = dict(
 # =========================================================
 st.markdown(f"""
 <style>
+    /* Google Fonts com fallback para ambientes sem acesso externo */
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=DM+Sans:wght@400;500;600&display=swap');
 
     /* ── Reset & Base ── */
@@ -107,12 +108,13 @@ st.markdown(f"""
     }}
     .stApp {{ background-color: {COLORS["bg"]} !important; }}
 
-    /* Oculta elementos nativos do Streamlit — mantém o toggle da sidebar */
+    /* Oculta elementos nativos — preserva o toggle da sidebar */
     #MainMenu {{ visibility: hidden; }}
     footer {{ visibility: hidden; }}
-    /* Oculta só o conteúdo interno do header (logo, deploy), mas mantém o toggle */
     header[data-testid="stHeader"] {{ background: transparent !important; }}
-    header[data-testid="stHeader"] > div:first-child {{ visibility: hidden; }}
+    /* Esconde só o botão de deploy e a barra de ferramentas, NÃO o toggle */
+    [data-testid="stToolbar"] {{ visibility: hidden; }}
+    .stDeployButton {{ display: none !important; }}
     .block-container {{
         padding-top: 0.5rem !important;
         padding-bottom: 1rem !important;
@@ -134,16 +136,17 @@ st.markdown(f"""
         background: {COLORS["header_grad"]};
         padding: 0 24px;
         height: 56px;
-        display: flex;
+        display: grid;
+        grid-template-columns: 1fr auto;
         align-items: center;
-        justify-content: space-between;
+        gap: 12px;
         border-radius: 10px;
-        margin-bottom: 16px;
+        margin-bottom: 18px;
         border: none;
-        box-shadow: 0 2px 12px rgba(26,58,107,0.18);
+        box-shadow: 0 2px 16px rgba(26,58,107,0.2);
     }}
     .topbar-left {{
-        display: flex; align-items: center; gap: 14px;
+        display: flex; align-items: center; gap: 12px; min-width: 0;
     }}
     .topbar-logo {{
         width: 32px; height: 32px; border-radius: 7px;
@@ -203,16 +206,13 @@ st.markdown(f"""
     section[data-testid="stSidebar"] {{
         background-color: {COLORS["bg_card"]};
         border-right: 1px solid {COLORS["border"]};
+        border-top: none;
         box-shadow: 2px 0 8px rgba(26,58,107,0.06);
     }}
     section[data-testid="stSidebar"] * {{ color: {COLORS["text"]} !important; }}
-    /* Linha de destaque no topo da sidebar */
-    section[data-testid="stSidebar"]::before {{
-        content: '';
-        display: block;
-        height: 3px;
-        background: {COLORS["header_grad"]};
-        border-radius: 0 0 3px 3px;
+    /* Linha de destaque no topo da sidebar — via border-top confiável */
+    section[data-testid="stSidebar"] {{
+        border-top: 3px solid {COLORS["accent"]} !important;
     }}
 
     /* ── Sidebar branding ── */
@@ -295,7 +295,7 @@ st.markdown(f"""
     div[data-testid="stMetric"] {{
         background: {COLORS["bg_card"]};
         border: 1px solid {COLORS["border"]};
-        border-top: 3px solid {COLORS["accent"]};
+        border-top: 3px solid {COLORS["accent"]} !important;
         border-radius: 10px;
         padding: 16px 18px 14px;
         box-shadow: 0 1px 3px rgba(26,58,107,0.06),
@@ -331,16 +331,17 @@ st.markdown(f"""
     ══════════════════════════════════════ */
     .section-title {{
         font-family: 'Inter', sans-serif;
-        font-size: 0.82rem; font-weight: 600;
+        font-size: 0.78rem; font-weight: 600;
         color: {COLORS["text_muted"]};
-        text-transform: uppercase; letter-spacing: 0.1em;
-        padding: 4px 0 10px 10px;
+        text-transform: uppercase; letter-spacing: 0.12em;
+        padding: 5px 0 9px 12px;
         border-bottom: 1px solid {COLORS["border"]};
-        margin: 6px 0 16px 0;
-        display: flex; align-items: center; gap: 8px;
         border-left: 3px solid {COLORS["accent"]};
+        margin: 8px 0 16px 0;
+        display: flex; align-items: center; gap: 8px;
     }}
-    .section-title .dot {{ display: none; }}
+    /* esconde o dot antigo — o destaque visual agora é a borda esquerda */
+    .section-title .dot {{ display: none !important; }}
 
     /* ══════════════════════════════════════
        TABS
@@ -773,8 +774,7 @@ k4.metric("📈 Eventos / Usuário",   f"{eventos_user:,}".replace(",", "."))
 k5.metric("🔥 Horário de Pico",     pico)
 
 st.markdown(
-    f'<div class="section-title" style="margin-top:10px;">' +
-    f'<span class="dot" style="background:{COLORS["warning"]};box-shadow:0 0 10px {COLORS["warning"]};"></span>' +
+    f'<div class="section-title" style="margin-top:10px;border-left-color:{COLORS["warning"]};">' +
     f'Ociosidade da Equipe — Média do Período</div>',
     unsafe_allow_html=True,
 )
@@ -790,7 +790,7 @@ st.markdown(
     f'<div style="font-size:0.8rem; color:{COLORS["text_muted"]}; ' +
     f'padding:6px 12px; border:1px solid {COLORS["border"]}; ' +
     f'border-radius:8px; display:inline-block; margin-bottom:8px;">' +
-    f'📅 Meta do período: <strong style="color:{COLORS["text"]};">{str(META_TOTAL).replace(",", ".")} eventos</strong>' +
+    f'📅 Meta do período: <strong style="color:{COLORS["text"]};">{META_TOTAL:,} eventos</strong>'.replace(",",".") +
     f' &nbsp;=&nbsp; {META_DIARIA}/dia × {dias_uteis} dia{"s" if dias_uteis > 1 else ""} útil{"" if dias_uteis == 1 else "is"} ' +
     f'(domingos excluídos)</div>',
     unsafe_allow_html=True,
