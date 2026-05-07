@@ -672,7 +672,7 @@ df_user["%meta"]        = df_user["event_count"] / META_TOTAL
 gargalo = df.groupby("time_hour_interval")["event_count"].sum().reset_index()
 media   = gargalo["event_count"].mean()
 gargalo["status"] = gargalo["event_count"].apply(
-    lambda x: "🔥 Pico" if x > media * 1.5 else ("🕳️ Vale" if x < media * 0.5 else "OK")
+    lambda x: "🔥 Pico" if x > media * 1.5 else ("🕳️ Vale" if x < media * 0.5 else "✅ OK")
 )
 
 ordem = sorted(
