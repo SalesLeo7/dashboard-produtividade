@@ -766,7 +766,7 @@ df_user_global["selecionado"] = df_user_global["user_name"].isin(_usuarios_filtr
 gargalo = df.groupby("time_hour_interval")["event_count"].sum().reset_index()
 media   = gargalo["event_count"].mean()
 gargalo["status"] = gargalo["event_count"].apply(
-    lambda x: "🔥 Pico" if x > media * 1.5 else ("🕳️ Vale" if x < media * 0.5 else "OK")
+    lambda x: "🔥 Pico" if x > media * 1.5 else ("🕳️ Vale" if x < media * 0.5 else "✅ OK")
 )
 
 ordem = sorted(
@@ -805,7 +805,7 @@ with tab1:
 
     with col2:
         section("Status por Faixa Horária")
-        status_cor = {"🔥 Pico": COLORS["danger"], "🕳️ Vale": COLORS["warning"], "OK": COLORS["success"]}
+        status_cor = {"🔥 Pico": COLORS["danger"], "🕳️ Vale": COLORS["warning"], "✅ OK": COLORS["success"]}
         fig_st = px.bar(
             gargalo, x="event_count", y="time_hour_interval", color="status",
             orientation="h", category_orders={"time_hour_interval": ordem},
