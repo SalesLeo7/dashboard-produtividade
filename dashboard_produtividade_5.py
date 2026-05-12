@@ -20,7 +20,7 @@ st.set_page_config(
 )
 
 # =========================================================
-#  PALETA E TEMA — DSV eVisibility + Power BI Dark
+#  PALETA E TEMA (Dark + Light — estilo Power BI)
 # =========================================================
 THEMES = {
     "dark": {
@@ -42,47 +42,42 @@ THEMES = {
         ],
     },
     "light": {
-        "bg":          "#F5F6F8",
+        "bg":          "#F4F6F8",
         "bg_card":     "#FFFFFF",
         "bg_card_2":   "#F8FAFC",
-        "border":      "#E1E5EB",
-        "text":        "#5A6169",
-        "text_muted":  "#8A9BB0",
-        "primary":     "#002664",
-        "accent":      "#3D5170",
+        "border":      "#E2E8F0",
+        "text":        "#1A202C",
+        "text_muted":  "#64748B",
+        "primary":     "#0078D4",
+        "accent":      "#00B294",
         "warning":     "#D97706",
         "danger":      "#DC2626",
         "success":     "#16A34A",
-        "header_grad": "linear-gradient(120deg, #FFFFFF 0%, #EEF2F9 60%, #FFFFFF 100%)",
+        "header_grad": "linear-gradient(120deg, #FFFFFF 0%, #E6F2FB 60%, #FFFFFF 100%)",
         "heat": [
-            [0.0, "#F5F6F8"], [0.2, "#C8D3E8"], [0.5, "#7A93C4"],
-            [0.8, "#3D5170"], [1.0, "#002664"],
+            [0.0, "#F4F6F8"], [0.2, "#CDE4F7"], [0.5, "#7FB8E5"],
+            [0.8, "#0078D4"], [1.0, "#003E73"],
         ],
     },
 }
 
-# Inicializa o tema (padrão: claro — DSV eVisibility)
+# Inicializa o tema antes de qualquer render
 if "theme_mode" not in st.session_state:
-    st.session_state["theme_mode"] = "light"
+    st.session_state["theme_mode"] = "dark"
 
 THEME = st.session_state["theme_mode"]
 COLORS = THEMES[THEME]
 
-PLOTLY_SEQ = (
-    ["#2EA8FF", "#00D4B4", "#F2B441", "#F85149", "#A371F7", "#3FB950", "#FF7B72"]
-    if THEME == "dark" else
-    ["#002664", "#3D5170", "#D97706", "#DC2626", "#7C3AED", "#16A34A", "#E11D48"]
-)
+PLOTLY_SEQ = ["#2EA8FF", "#00D4B4", "#F2B441", "#F85149", "#A371F7", "#3FB950", "#FF7B72"] \
+    if THEME == "dark" else \
+    ["#0078D4", "#00B294", "#D97706", "#DC2626", "#7C3AED", "#16A34A", "#E11D48"]
 
 PLOTLY_HEAT = COLORS["heat"]
 
 PLOTLY_LAYOUT = dict(
     paper_bgcolor=COLORS["bg_card"],
     plot_bgcolor=COLORS["bg_card"],
-    font=dict(
-        family='-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif',
-        color=COLORS["text"], size=13,
-    ),
+    font=dict(family="Segoe UI, Inter, sans-serif", color=COLORS["text"], size=13),
     margin=dict(l=20, r=20, t=40, b=20),
     xaxis=dict(gridcolor=COLORS["border"], zerolinecolor=COLORS["border"]),
     yaxis=dict(gridcolor=COLORS["border"], zerolinecolor=COLORS["border"]),
@@ -90,74 +85,61 @@ PLOTLY_LAYOUT = dict(
 )
 
 # =========================================================
-#  CSS CUSTOMIZADO — DSV eVisibility + Power BI Dark
+#  CSS CUSTOMIZADO
 # =========================================================
 st.markdown(f"""
 <style>
-    /* ── Reset e base ── */
-    *, *::before, *::after {{ box-sizing: border-box; }}
-    html, body, .stApp {{
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-        font-size: 15px;
+    .stApp {{
+        background: {COLORS["bg"]};
         color: {COLORS["text"]};
-        background-color: {COLORS["bg"]};
-    }}
-    .stApp {{ background-color: {COLORS["bg"]}; }}
-
-    /* Oculta menu hamburger, rodapé e header nativo do Streamlit */
-    #MainMenu, footer, header {{ visibility: hidden; }}
-    .block-container {{ padding-top: 1rem !important; padding-bottom: 1rem !important; }}
-
-    /* ── Headings ── */
-    h1, h2, h3, h4, h5, h6 {{
-        color: {COLORS["primary"]} !important;
-        font-family: inherit;
-        letter-spacing: -0.01em;
     }}
 
-    /* ── Sidebar ── */
+    /* Sidebar */
     section[data-testid="stSidebar"] {{
-        background-color: {COLORS["bg_card"]};
-        box-shadow: rgba(90,97,105,0.12) 2px 0px 10px 0px;
-        border-right: none !important;
+        background: {COLORS["bg_card"]};
+        border-right: 1px solid {COLORS["border"]};
     }}
     section[data-testid="stSidebar"] * {{ color: {COLORS["text"]} !important; }}
 
-    /* ── KPI cards ── */
+    /* Headings */
+    h1, h2, h3, h4 {{
+        color: {COLORS["text"]} !important;
+        font-family: 'Segoe UI', 'Inter', sans-serif;
+        letter-spacing: -0.01em;
+    }}
+
+    /* KPI cards */
     div[data-testid="stMetric"] {{
-        background: {COLORS["bg_card"]};
-        border: none;
+        background: linear-gradient(145deg, {COLORS["bg_card"]} 0%, {COLORS["bg_card_2"]} 100%);
+        border: 1px solid {COLORS["border"]};
         border-left: 3px solid {COLORS["primary"]};
+        padding: 18px 20px;
         border-radius: 10px;
-        padding: 16px 20px;
-        box-shadow: rgba(90,97,105,0.11) 0px 2px 0px,
-                    rgba(90,97,105,0.12) 0px 4px 8px,
-                    rgba(90,97,105,0.06) 0px 10px 10px,
-                    rgba(90,97,105,0.08) 0px 7px 70px;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.25);
         transition: transform .15s ease, box-shadow .15s ease;
     }}
     div[data-testid="stMetric"]:hover {{
         transform: translateY(-2px);
-        box-shadow: rgba(90,97,105,0.18) 0px 6px 24px;
+        box-shadow: 0 6px 22px rgba(46,168,255,0.18);
     }}
     div[data-testid="stMetricLabel"] p {{
         color: {COLORS["text_muted"]} !important;
-        font-size: 0.75rem !important;
+        font-size: 0.78rem !important;
         text-transform: uppercase;
         letter-spacing: 0.08em;
         font-weight: 600;
     }}
     div[data-testid="stMetricValue"] {{
-        color: {COLORS["primary"]} !important;
-        font-size: 1.75rem !important;
+        color: {COLORS["text"]} !important;
+        font-size: 1.9rem !important;
         font-weight: 700 !important;
     }}
 
-    /* ── Section titles ── */
+    /* Section titles */
     .section-title {{
-        font-size: 1rem;
+        font-size: 1.05rem;
         font-weight: 600;
-        color: {COLORS["primary"]};
+        color: {COLORS["text"]};
         padding: 6px 0 10px 0;
         border-bottom: 1px solid {COLORS["border"]};
         margin: 8px 0 14px 0;
@@ -166,81 +148,42 @@ st.markdown(f"""
     .section-title .dot {{
         width: 8px; height: 8px; border-radius: 50%;
         background: {COLORS["primary"]};
-        box-shadow: 0 0 8px {COLORS["accent"]};
-        flex-shrink: 0;
+        box-shadow: 0 0 10px {COLORS["primary"]};
     }}
 
-    /* ── Header banner (top bar) ── */
+    /* Header banner */
     .header-banner {{
-        background: {COLORS["bg_card"]};
-        border: none;
-        border-radius: 10px;
-        padding: 18px 24px;
+        background: {COLORS["header_grad"]};
+        border: 1px solid {COLORS["border"]};
+        border-radius: 12px;
+        padding: 22px 26px;
         margin-bottom: 18px;
-        display: flex; align-items: center; justify-content: space-between;
-        box-shadow: rgba(90,97,105,0.11) 0px 2px 0px,
-                    rgba(90,97,105,0.12) 0px 4px 8px,
-                    rgba(90,97,105,0.06) 0px 10px 10px;
+        display: flex; flex-direction: column; gap: 4px;
     }}
     .header-banner h1 {{
-        margin: 0; font-size: 1.35rem; font-weight: 600;
-        color: {COLORS["primary"]} !important;
+        margin: 0; font-size: 1.6rem; font-weight: 700;
     }}
     .header-banner p {{
-        margin: 4px 0 0 0; color: {COLORS["text_muted"]}; font-size: 0.85rem;
-    }}
-    .header-badge {{
-        background: {COLORS["bg"]};
-        border: 1px solid {COLORS["border"]};
-        border-radius: 20px;
-        padding: 5px 14px;
-        font-size: 0.75rem;
-        color: {COLORS["accent"]};
-        font-weight: 600;
-        letter-spacing: 0.04em;
-        white-space: nowrap;
+        margin: 0; color: {COLORS["text_muted"]}; font-size: 0.9rem;
     }}
 
-    /* ── Card wrapper (seções de conteúdo) ── */
-    .dsv-card {{
-        background: {COLORS["bg_card"]};
-        border-radius: 10px;
-        border: none;
-        box-shadow: rgba(90,97,105,0.11) 0px 2px 0px,
-                    rgba(90,97,105,0.12) 0px 4px 8px,
-                    rgba(90,97,105,0.06) 0px 10px 10px,
-                    rgba(90,97,105,0.10) 0px 7px 70px;
-        margin-bottom: 16px;
-        padding: 16px 20px;
-    }}
-    .dsv-card-header {{
-        background: {COLORS["bg_card"]};
-        border-bottom: 1px solid {COLORS["border"]};
-        border-radius: 10px 10px 0 0;
-        padding: 10px 16px;
-        display: flex; justify-content: space-between; align-items: center;
-        font-size: 1rem; font-weight: 500; color: {COLORS["primary"]};
-    }}
-
-    /* ── Dataframe wrapper ── */
+    /* Dataframe wrapper */
     div[data-testid="stDataFrame"] {{
         border: 1px solid {COLORS["border"]};
         border-radius: 10px;
         overflow: hidden;
-        box-shadow: rgba(90,97,105,0.08) 0px 2px 8px;
     }}
 
-    /* ── Divider ── */
+    /* Divider */
     hr {{ border-color: {COLORS["border"]} !important; }}
 
-    /* ── Tabs ── */
+    /* Tabs */
     .stTabs [data-baseweb="tab-list"] {{
         gap: 4px;
         background: {COLORS["bg_card"]};
         border-radius: 10px;
         padding: 4px;
         border: 1px solid {COLORS["border"]};
-        box-shadow: rgba(90,97,105,0.08) 0px 2px 6px;
     }}
     .stTabs [data-baseweb="tab"] {{
         background: transparent;
@@ -248,30 +191,25 @@ st.markdown(f"""
         border-radius: 8px;
         padding: 8px 16px;
         font-weight: 500;
-        font-size: 0.88rem;
     }}
     .stTabs [aria-selected="true"] {{
         background: {COLORS["primary"]} !important;
-        color: #FFFFFF !important;
+        color: white !important;
     }}
 
-    /* ── Inputs e selects ── */
-    .stMultiSelect div[data-baseweb="select"],
-    .stSelectbox div[data-baseweb="select"] {{
+    /* Inputs */
+    .stMultiSelect div[data-baseweb="select"], .stSelectbox div[data-baseweb="select"] {{
         background: {COLORS["bg_card_2"]} !important;
         border-color: {COLORS["border"]} !important;
-        border-radius: 6px !important;
     }}
 
-    /* ── Scrollbar ── */
-    ::-webkit-scrollbar {{ width: 8px; height: 8px; }}
+    /* Scrollbar */
+    ::-webkit-scrollbar {{ width: 10px; height: 10px; }}
     ::-webkit-scrollbar-track {{ background: {COLORS["bg"]}; }}
-    ::-webkit-scrollbar-thumb {{
-        background: {COLORS["border"]}; border-radius: 6px;
-    }}
-    ::-webkit-scrollbar-thumb:hover {{ background: {COLORS["accent"]}; }}
+    ::-webkit-scrollbar-thumb {{ background: {COLORS["border"]}; border-radius: 6px; }}
+    ::-webkit-scrollbar-thumb:hover {{ background: {COLORS["primary"]}; }}
 
-    /* ── Sidebar — branding ── */
+    /* Sidebar — branding e seções */
     .sb-brand {{
         display: flex; align-items: center; gap: 10px;
         padding: 6px 4px 14px 4px;
@@ -279,23 +217,22 @@ st.markdown(f"""
         margin-bottom: 14px;
     }}
     .sb-brand .logo {{
-        width: 36px; height: 36px; border-radius: 8px;
+        width: 34px; height: 34px; border-radius: 8px;
         background: linear-gradient(135deg, {COLORS["primary"]} 0%, {COLORS["accent"]} 100%);
         display: flex; align-items: center; justify-content: center;
-        font-size: 18px;
-        box-shadow: rgba(90,97,105,0.18) 0px 4px 12px;
+        font-size: 18px; box-shadow: 0 4px 14px rgba(46,168,255,0.35);
     }}
     .sb-brand .title {{
-        font-size: 0.95rem; font-weight: 700; color: {COLORS["primary"]};
+        font-size: 0.95rem; font-weight: 700; color: {COLORS["text"]};
         line-height: 1.1;
     }}
     .sb-brand .subtitle {{
-        font-size: 0.7rem; color: {COLORS["text_muted"]};
+        font-size: 0.72rem; color: {COLORS["text_muted"]};
         text-transform: uppercase; letter-spacing: 0.08em;
     }}
 
     .sb-section-label {{
-        font-size: 0.68rem;
+        font-size: 0.7rem;
         text-transform: uppercase;
         letter-spacing: 0.1em;
         color: {COLORS["text_muted"]} !important;
@@ -304,24 +241,28 @@ st.markdown(f"""
         padding-left: 2px;
     }}
 
-    /* ── Upload card na sidebar ── */
+    /* Upload card no rodapé da sidebar */
     .sb-upload-wrap {{
         margin-top: 10px;
         padding: 12px;
         background: {COLORS["bg_card_2"]};
         border: 1px dashed {COLORS["border"]};
-        border-radius: 8px;
+        border-radius: 10px;
     }}
     .sb-upload-title {{
-        font-size: 0.78rem; font-weight: 600;
-        color: {COLORS["primary"]};
+        font-size: 0.78rem;
+        font-weight: 600;
+        color: {COLORS["text"]};
         display: flex; align-items: center; gap: 6px;
         margin-bottom: 4px;
     }}
     .sb-upload-hint {{
-        font-size: 0.7rem; color: {COLORS["text_muted"]}; margin-bottom: 8px;
+        font-size: 0.7rem;
+        color: {COLORS["text_muted"]};
+        margin-bottom: 8px;
     }}
 
+    /* Compactar o file_uploader dentro da sidebar */
     section[data-testid="stSidebar"] [data-testid="stFileUploader"] section {{
         background: {COLORS["bg_card"]};
         border: 1px solid {COLORS["border"]};
@@ -341,43 +282,31 @@ st.markdown(f"""
         padding: 4px 12px !important;
     }}
 
-    /* ── Status arquivo carregado ── */
+    /* Status do arquivo carregado */
     .sb-file-status {{
         display: flex; align-items: center; gap: 8px;
-        background: rgba(22,163,74,0.06);
-        border: 1px solid rgba(22,163,74,0.25);
+        background: rgba(63,185,80,0.08);
+        border: 1px solid rgba(63,185,80,0.3);
         border-radius: 8px;
-        padding: 8px 10px; margin-top: 8px;
-        font-size: 0.75rem; color: {COLORS["success"]};
+        padding: 8px 10px;
+        margin-top: 8px;
+        font-size: 0.75rem;
+        color: {COLORS["success"]};
     }}
     .sb-file-status .dot-ok {{
         width: 8px; height: 8px; border-radius: 50%;
         background: {COLORS["success"]};
+        box-shadow: 0 0 8px {COLORS["success"]};
     }}
 
-    /* ── Footer da sidebar ── */
+    /* Footer da sidebar */
     .sb-footer {{
-        margin-top: 18px; padding-top: 10px;
+        margin-top: 18px;
+        padding-top: 10px;
         border-top: 1px solid {COLORS["border"]};
-        font-size: 0.66rem; color: {COLORS["text_muted"]};
+        font-size: 0.68rem;
+        color: {COLORS["text_muted"]};
         text-align: center;
-    }}
-
-    /* ── Botões primários ── */
-    .stButton > button[kind="primary"] {{
-        background-color: {COLORS["primary"]} !important;
-        border: none !important;
-        border-radius: 6px !important;
-        font-size: 13px !important;
-        font-weight: 500 !important;
-        color: #FFFFFF !important;
-    }}
-    .stButton > button[kind="secondary"] {{
-        border: 1px solid {COLORS["border"]} !important;
-        border-radius: 6px !important;
-        font-size: 13px !important;
-        color: {COLORS["text"]} !important;
-        background: {COLORS["bg_card"]} !important;
     }}
 </style>
 """, unsafe_allow_html=True)
@@ -446,11 +375,8 @@ def load_data(file_bytes: bytes) -> pd.DataFrame:
 # =========================================================
 st.markdown(f"""
 <div class="header-banner">
-    <div>
-        <h1>📊 Dashboard de Produtividade</h1>
-        <p>Visão executiva por usuário · análise de jornada, volume e performance</p>
-    </div>
-    <div class="header-badge">Painel Gestor</div>
+    <h1>📊 Dashboard de Produtividade</h1>
+    <p>Visão executiva por usuário · análise de jornada, volume e performance</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -563,10 +489,18 @@ META_DIARIA = st.sidebar.number_input("Meta diária de eventos por usuário", va
 
 with st.sidebar.expander("⚖️ Pesos do Score"):
     peso_volume = st.slider(
-        "Peso — Volume (%)", min_value=0, max_value=100, value=60, step=5,
+        "Peso — Volume (%)", min_value=0, max_value=90, value=55, step=5,
     ) / 100
-    peso_tempo = round(1 - peso_volume, 2)
-    st.caption(f"Tempo: {int(peso_tempo * 100)}% (complementar automático)")
+    peso_ocio_raw = st.slider(
+        "Peso — Ociosidade (%)", min_value=0, max_value=40, value=15, step=5,
+        help="Penaliza usuários com alto tempo ocioso. 0% = ociosidade não afeta o score.",
+    ) / 100
+    peso_tempo = max(round(1 - peso_volume - peso_ocio_raw, 2), 0.0)
+    peso_ocio  = round(1 - peso_volume - peso_tempo, 2)
+    st.caption(
+        f"Velocidade: {int(peso_tempo * 100)}% (complementar automático) · "
+        f"Ociosidade: {int(peso_ocio * 100)}%"
+    )
 
 # =========================================================
 # 📁 FONTE DE DADOS (rodapé da sidebar — discreto)
@@ -613,7 +547,7 @@ if df.empty:
 # 📅 DIAS ÚTEIS E META DO PERÍODO
 # Conta os dias únicos presentes nos dados filtrados,
 # excluindo domingos (weekday == 6).
-# META_TOTAL = META_DIARIA × dias_uteis
+# META_TOTAL = META_DIÁRIA × dias_uteis
 # =========================================================
 if "date" in df.columns:
     datas_unicas = pd.to_datetime(df["date"].dropna().dt.normalize().unique())
@@ -625,7 +559,7 @@ dias_uteis  = max(dias_uteis, 1)          # garante mínimo 1 dia
 META_TOTAL  = META_DIARIA * dias_uteis    # meta real do período selecionado
 
 # =========================================================
-# ⏸️ TEMPO OCIOSO  (% do turno + maior gap intra-turno)
+# ⏸️ TEMPO Ocioso (% do turno + maior gap intra-turno)
 #
 # Para cada usuário:
 #   1. Calcula todos os gaps positivos entre hora_fim[i] e hora_inicio[i+1]
@@ -635,17 +569,41 @@ META_TOTAL  = META_DIARIA * dias_uteis    # meta real do período selecionado
 #        maior_gap  = max(gaps)  — maior ausência pontual intra-turno
 # =========================================================
 def calc_ociosidade(df_in: pd.DataFrame) -> pd.DataFrame:
-    rows = []
-    for user, grp in df_in.groupby("user_name"):
-        grp = grp.sort_values("hora_inicio").reset_index(drop=True)
+    """
+    Calcula ociosidade por usuário, processando cada (usuário × dia) de forma independente.
 
-        # Duração total do turno (primeiro início → último fim)
+    Regras de negócio:
+      • Agrupa por (user_name, date) — processa cada dia separadamente.
+      • O almoço (~1h) é identificado como o MAIOR gap ≥ 45 min do dia.
+        Apenas esse gap é excluído da contagem de ociosidade.
+      • Quaisquer outros gaps ≥ 45 min no mesmo dia são tratados como
+        ociosidade real (ausência não justificada durante o turno).
+      • O denominador do % é o turno efetivo (turno_total − almoço), não o turno bruto.
+      • pct_ocioso é limitado a 100% para evitar distorções.
+      • n_ausencias_graves conta gaps ≥ 45 min que NÃO foram o almoço (alerta ao gestor).
+
+    Retorna médias por usuário (média dos dias analisados).
+    """
+    rows = []
+
+    has_date = "date" in df_in.columns and df_in["date"].notna().any()
+
+    if has_date:
+        df_work = df_in.copy()
+        df_work["_date"] = pd.to_datetime(df_work["date"], errors="coerce").dt.normalize()
+        group_keys = ["user_name", "_date"]
+    else:
+        df_work = df_in.copy()
+        group_keys = ["user_name"]
+
+    for keys, grp in df_work.groupby(group_keys):
+        user = keys[0] if isinstance(keys, tuple) else keys
+        grp  = grp.sort_values("hora_inicio").reset_index(drop=True)
+
         turno_min = (grp["hora_fim"].iloc[-1] - grp["hora_inicio"].iloc[0]).total_seconds() / 60
         if turno_min <= 0:
-            rows.append({"user_name": user, "pct_ocioso": 0.0, "maior_gap": 0.0})
             continue
 
-        # Todos os gaps positivos entre eventos consecutivos
         gaps = []
         for i in range(len(grp) - 1):
             delta = (grp.loc[i + 1, "hora_inicio"] - grp.loc[i, "hora_fim"]).total_seconds() / 60
@@ -653,28 +611,148 @@ def calc_ociosidade(df_in: pd.DataFrame) -> pd.DataFrame:
                 gaps.append(round(delta, 1))
 
         if not gaps:
-            rows.append({"user_name": user, "pct_ocioso": 0.0, "maior_gap": 0.0})
+            rows.append({"user_name": user, "pct_ocioso": 0.0,
+                         "maior_gap": 0.0, "n_ausencias_graves": 0})
             continue
 
-        # Remove o maior gap se for ≥ 45 min (almoço / pausa longa)
+        # Remove apenas o MAIOR gap >= 45 min como almoço.
+        # Os demais (incluindo outros >= 45 min) contam como ociosidade.
         gaps_sorted = sorted(gaps, reverse=True)
         if gaps_sorted[0] >= 45:
-            gaps_intra = gaps_sorted[1:]   # exclui o almoço
+            almoco_min = gaps_sorted[0]
+            gaps_intra = gaps_sorted[1:]
         else:
+            almoco_min = 0.0
             gaps_intra = gaps_sorted
+
+        # Turno efetivo = turno total menos apenas o almoço
+        turno_efetivo = max(turno_min - almoco_min, 1.0)
 
         total_ocio = sum(gaps_intra)
         maior_gap  = max(gaps_intra) if gaps_intra else 0.0
-        pct_ocioso = round((total_ocio / turno_min) * 100, 1)
+        pct_ocioso = min(round((total_ocio / turno_efetivo) * 100, 1), 100.0)
+
+        # Gaps >= 45 min que ficaram (não eram o almoço) = ausências graves
+        n_ausencias_graves = sum(1 for g in gaps_intra if g >= 45)
 
         rows.append({
-            "user_name":  user,
-            "pct_ocioso": pct_ocioso,
-            "maior_gap":  round(maior_gap, 1),
+            "user_name":          user,
+            "pct_ocioso":         pct_ocioso,
+            "maior_gap":          round(maior_gap, 1),
+            "n_ausencias_graves": n_ausencias_graves,
         })
-    return pd.DataFrame(rows) if rows else pd.DataFrame(
-        columns=["user_name", "pct_ocioso", "maior_gap"]
+
+    if not rows:
+        return pd.DataFrame(
+            columns=["user_name", "pct_ocioso", "maior_gap", "n_ausencias_graves"]
+        )
+
+    df_r = pd.DataFrame(rows)
+    return (
+        df_r.groupby("user_name")
+        .agg(
+            pct_ocioso         =("pct_ocioso",         "mean"),
+            maior_gap          =("maior_gap",           "mean"),
+            n_ausencias_graves =("n_ausencias_graves",  "sum"),
+        )
+        .round({"pct_ocioso": 1, "maior_gap": 1})
+        .reset_index()
     )
+
+# =========================================================
+# ⏸️ OCIOSIDADE DIÁRIA — detalhamento por dia para o feedback
+# =========================================================
+def calc_ociosidade_diaria(df_in: pd.DataFrame, user_name: str) -> pd.DataFrame:
+    """
+    Retorna o detalhamento de ociosidade dia a dia para um usuário específico.
+    Usado na aba de Feedback para mostrar o histórico de gaps ao gestor.
+
+    Colunas retornadas:
+      data             — data do dia
+      pct_ocioso       — % do turno efetivo sem evento
+      maior_gap        — maior gap intra-turno (min)
+      total_ocio_min   — soma total de minutos ociosos intra-turno
+      almoco_min       — duração do gap removido como almoço (min)
+      n_ausencias_graves — gaps >= 45 min além do almoço
+      gaps_detalhe     — string resumida dos gaps intra-turno detectados
+    """
+    rows = []
+    df_u = df_in[df_in["user_name"] == user_name].copy()
+
+    if df_u.empty or "date" not in df_u.columns:
+        return pd.DataFrame(columns=[
+            "data", "pct_ocioso", "maior_gap", "total_ocio_min",
+            "almoco_min", "n_ausencias_graves", "gaps_detalhe",
+        ])
+
+    df_u["_date"] = pd.to_datetime(df_u["date"], errors="coerce").dt.normalize()
+
+    for dia, grp in df_u.groupby("_date"):
+        grp = grp.sort_values("hora_inicio").reset_index(drop=True)
+
+        turno_min = (grp["hora_fim"].iloc[-1] - grp["hora_inicio"].iloc[0]).total_seconds() / 60
+        if turno_min <= 0:
+            continue
+
+        gaps = []
+        for i in range(len(grp) - 1):
+            delta = (grp.loc[i + 1, "hora_inicio"] - grp.loc[i, "hora_fim"]).total_seconds() / 60
+            if delta > 0:
+                gaps.append(round(delta, 1))
+
+        if not gaps:
+            rows.append({
+                "data":               dia,
+                "pct_ocioso":         0.0,
+                "maior_gap":          0.0,
+                "total_ocio_min":     0.0,
+                "almoco_min":         0.0,
+                "n_ausencias_graves": 0,
+                "gaps_detalhe":       "—",
+            })
+            continue
+
+        gaps_sorted = sorted(gaps, reverse=True)
+        if gaps_sorted[0] >= 45:
+            almoco_min = gaps_sorted[0]
+            gaps_intra = gaps_sorted[1:]
+        else:
+            almoco_min = 0.0
+            gaps_intra = gaps_sorted
+
+        turno_efetivo      = max(turno_min - almoco_min, 1.0)
+        total_ocio         = sum(gaps_intra)
+        maior_gap          = max(gaps_intra) if gaps_intra else 0.0
+        pct_ocioso         = min(round((total_ocio / turno_efetivo) * 100, 1), 100.0)
+        n_ausencias_graves = sum(1 for g in gaps_intra if g >= 45)
+
+        # Monta string de detalhamento: mostra gaps > 5 min para não poluir
+        gaps_visiveis = sorted([g for g in gaps_intra if g > 5], reverse=True)
+        if gaps_visiveis:
+            gaps_detalhe = ", ".join(f"{g:.0f} min" for g in gaps_visiveis[:6])
+            if len(gaps_visiveis) > 6:
+                gaps_detalhe += f" (+{len(gaps_visiveis) - 6} menores)"
+        else:
+            gaps_detalhe = "Nenhum gap significativo (> 5 min)"
+
+        rows.append({
+            "data":               dia,
+            "pct_ocioso":         pct_ocioso,
+            "maior_gap":          round(maior_gap, 1),
+            "total_ocio_min":     round(total_ocio, 1),
+            "almoco_min":         round(almoco_min, 1),
+            "n_ausencias_graves": n_ausencias_graves,
+            "gaps_detalhe":       gaps_detalhe,
+        })
+
+    if not rows:
+        return pd.DataFrame(columns=[
+            "data", "pct_ocioso", "maior_gap", "total_ocio_min",
+            "almoco_min", "n_ausencias_graves", "gaps_detalhe",
+        ])
+
+    return pd.DataFrame(rows).sort_values("data").reset_index(drop=True)
+
 
 df_ocio         = calc_ociosidade(df)
 ocio_pct_geral  = round(df_ocio["pct_ocioso"].mean(), 1)  if not df_ocio.empty else 0.0
@@ -737,28 +815,18 @@ max_time = df_user["event_elapsed_time"].max() or 1
 
 df_user["score_volume"] = df_user["event_count"]        / max_vol
 df_user["score_tempo"]  = 1 - (df_user["event_elapsed_time"] / max_time)
-df_user["score"]        = df_user["score_volume"] * peso_volume + df_user["score_tempo"] * peso_tempo
-df_user["%meta"]        = df_user["event_count"] / META_TOTAL
 
-# Score global — calculado contra TODOS os usuários (df_global),
-# independente do filtro de usuário. Usado no ranking de performance
-# para que a posição de cada pessoa reflita a equipe inteira.
-df_user_global = df_global.groupby("user_name").agg({
-    "event_count":        "sum",
-    "event_elapsed_time": "mean",
-}).reset_index()
-_max_vol_g  = df_user_global["event_count"].max()        or 1
-_max_time_g = df_user_global["event_elapsed_time"].max() or 1
-df_user_global["score_volume"] = df_user_global["event_count"]        / _max_vol_g
-df_user_global["score_tempo"]  = 1 - (df_user_global["event_elapsed_time"] / _max_time_g)
-df_user_global["score"]        = (
-    df_user_global["score_volume"] * peso_volume
-    + df_user_global["score_tempo"] * peso_tempo
+# Incorpora ociosidade: 0% ocioso → score_ocio = 1.0 | 100% ocioso → 0.0
+df_user = df_user.merge(df_ocio[["user_name", "pct_ocioso"]], on="user_name", how="left")
+df_user["pct_ocioso"] = df_user["pct_ocioso"].fillna(0)
+df_user["score_ocio"] = 1 - (df_user["pct_ocioso"] / 100)
+
+df_user["score"]  = (
+    df_user["score_volume"] * peso_volume
+    + df_user["score_tempo"]  * peso_tempo
+    + df_user["score_ocio"]   * peso_ocio
 )
-df_user_global["%meta"] = df_user_global["event_count"] / META_TOTAL
-# Marca quais usuários estão no filtro ativo (ou todos, se nenhum filtro)
-_usuarios_filtrados = set(df_user["user_name"].tolist())
-df_user_global["selecionado"] = df_user_global["user_name"].isin(_usuarios_filtrados)
+df_user["%meta"]  = df_user["event_count"] / META_TOTAL
 
 # =========================================================
 # 🧱 GARGALO
@@ -801,6 +869,7 @@ with tab1:
         )
         fig_vol.add_hline(y=media, line_dash="dash", line_color=COLORS["text_muted"],
                           annotation_text="Média", annotation_font_color=COLORS["text_muted"])
+        fig_vol.update_layout(xaxis=dict(tickangle=-35, tickfont=dict(size=11)))
         st.plotly_chart(style_fig(fig_vol, 380), use_container_width=True)
 
     with col2:
@@ -825,10 +894,20 @@ with tab1:
 
     section("⏸️ Análise de Ociosidade por Usuário")
     st.caption(
-        "O maior gap diário (≥ 45 min) é descartado automaticamente como almoço/pausa longa. "
-        "Apenas intervalos intra-turno são contabilizados."
+        "O maior gap ≥ 45 min de cada dia é descartado automaticamente como horário de almoço (~1h). "
+        "Outros gaps ≥ 45 min no mesmo dia contam como ociosidade real. "
+        "O % é calculado sobre o turno efetivo (total − almoço)."
     )
     if not df_ocio.empty:
+        # Ausências graves: gaps >= 45 min que NÃO foram o almoço
+        total_ausencias = int(df_ocio["n_ausencias_graves"].sum()) if "n_ausencias_graves" in df_ocio.columns else 0
+        if total_ausencias > 0:
+            s = "s" if total_ausencias > 1 else ""
+            st.warning(
+                f"⚠️ {total_ausencias} ausência{s} grave{s} detectada{s} no período "
+                f"(gap ≥ 45 min fora do horário de almoço). "
+                f"Verifique a timeline individual de cada colaborador."
+            )
 
         def cor_pct(v):
             if v > 20: return COLORS["danger"]
@@ -893,49 +972,21 @@ with tab1:
 
 # ----- TAB 2: PERFORMANCE -----
 with tab2:
-    section("Ranking de Performance (Score) — Equipe Completa")
+    section("Ranking de Performance (Score)")
 
-    df_rank = df_user_global.sort_values("score", ascending=False).copy()
+    df_rank = df_user.sort_values("score", ascending=False).copy()
     df_rank["score_pct"] = (df_rank["score"] * 100).round(1)
-    df_rank["posicao"]   = range(1, len(df_rank) + 1)
 
-    _filtro_ativo = len(_usuarios_filtrados) < len(df_user_global)
-
-    # Cor: destaque para selecionados, cinza para os demais
-    def _rank_color(row):
-        if not _filtro_ativo or row["selecionado"]:
-            v = row["score_pct"] / 100
-            if v >= 0.7:   return COLORS["success"]
-            elif v >= 0.4: return COLORS["warning"]
-            else:          return COLORS["danger"]
-        return COLORS["border"]   # cinza para não selecionados
-
-    def _rank_opacity(row):
-        return 1.0 if (not _filtro_ativo or row["selecionado"]) else 0.35
-
-    bar_colors   = [_rank_color(r)   for _, r in df_rank.iterrows()]
-    bar_opacities = [_rank_opacity(r) for _, r in df_rank.iterrows()]
-
-    fig_rank = go.Figure(go.Bar(
-        x=df_rank["score_pct"],
-        y=df_rank["user_name"],
-        orientation="h",
-        marker=dict(color=bar_colors, opacity=bar_opacities),
-        text=df_rank.apply(
-            lambda r: f"{r['score_pct']:.1f}  (#{r['posicao']}º)", axis=1
-        ),
-        textposition="outside",
-        hovertemplate="<b>%{y}</b><br>Score: %{x:.1f}%<extra></extra>",
-    ))
-    fig_rank.update_layout(yaxis=dict(autorange="reversed"), xaxis_title="Score (%)")
-
-    if _filtro_ativo:
-        nomes = ", ".join(sorted(_usuarios_filtrados))
-        st.caption(
-            f"🔍 Filtro ativo: **{nomes}** destacado(s). "
-            "Os demais colaboradores aparecem em cinza para referência de posição."
-        )
-    st.plotly_chart(style_fig(fig_rank, max(320, 24 * len(df_rank))), use_container_width=True)
+    fig_rank = px.bar(
+        df_rank, x="score_pct", y="user_name", orientation="h",
+        color="score_pct", color_continuous_scale=[[0, COLORS["danger"]],
+                                                   [0.5, COLORS["warning"]],
+                                                   [1, COLORS["success"]]],
+        text="score_pct",
+    )
+    fig_rank.update_traces(texttemplate="%{text:.1f}", textposition="outside")
+    fig_rank.update_layout(yaxis=dict(autorange="reversed"), coloraxis_showscale=False)
+    st.plotly_chart(style_fig(fig_rank, max(320, 28 * len(df_rank))), use_container_width=True)
 
     col_a, col_b = st.columns(2)
     with col_a:
@@ -960,9 +1011,10 @@ with tab2:
             df_user, x="event_elapsed_time", y="event_count",
             size="event_count", color="score",
             color_continuous_scale=[[0, COLORS["danger"]], [0.5, COLORS["warning"]], [1, COLORS["success"]]],
-            hover_name="user_name",
+            hover_name="user_name", text="user_name",
             labels={"event_elapsed_time": "Tempo médio (s)", "event_count": "Eventos"},
         )
+        fig_sc.update_traces(textposition="top center", textfont=dict(size=10, color=COLORS["text_muted"]))
         st.plotly_chart(style_fig(fig_sc, 360), use_container_width=True)
 
 # ----- TAB 3: JORNADA -----
@@ -998,13 +1050,42 @@ with tab3:
         hover_data=["event_count", "event_elapsed_time"],
     )
     fig_tl.update_yaxes(autorange="reversed")
+
+    # Sobrepõe os gaps (períodos ociosos) como blocos translúcidos
+    df_tl_sorted = df_tl.sort_values("hora_inicio").reset_index(drop=True)
+    for i in range(len(df_tl_sorted) - 1):
+        gap_min = (df_tl_sorted.loc[i + 1, "hora_inicio"] - df_tl_sorted.loc[i, "hora_fim"]).total_seconds() / 60
+        if gap_min <= 0:
+            continue
+        if gap_min >= 45:
+            gap_color = "rgba(100,100,100,0.12)"  # pausa longa (almoço) — neutro
+            gap_label = f"⏸ Pausa longa: {gap_min:.0f} min"
+        elif gap_min > 30:
+            gap_color = f"rgba({int(COLORS['danger'][1:3],16)},{int(COLORS['danger'][3:5],16)},{int(COLORS['danger'][5:7],16)},0.18)"
+            gap_label = f"⚠️ Gap crítico: {gap_min:.0f} min"
+        elif gap_min > 15:
+            gap_color = f"rgba({int(COLORS['warning'][1:3],16)},{int(COLORS['warning'][3:5],16)},{int(COLORS['warning'][5:7],16)},0.15)"
+            gap_label = f"🟡 Gap médio: {gap_min:.0f} min"
+        else:
+            continue  # gaps ≤ 15 min não são marcados (dentro do normal)
+        fig_tl.add_vrect(
+            x0=df_tl_sorted.loc[i, "hora_fim"],
+            x1=df_tl_sorted.loc[i + 1, "hora_inicio"],
+            fillcolor=gap_color, line_width=0,
+            annotation_text=gap_label,
+            annotation_font_size=10,
+            annotation_font_color=COLORS["text_muted"],
+        )
+
     st.plotly_chart(style_fig(fig_tl, 420), use_container_width=True)
+    st.caption("🟡 Gap médio (15–30 min) e 🔴 Gap crítico (> 30 min) destacados na timeline. Pausas ≥ 45 min (almoço) em cinza.")
 
 # ----- TAB 4: DADOS -----
 with tab4:
     section("Base de Dados Filtrada")
     st.caption(f"{len(df):,} registros".replace(",", "."))
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    colunas_visiveis = [c for c in df.columns if c not in ("hora_inicio", "hora_fim", "_date")]
+    st.dataframe(df[colunas_visiveis], use_container_width=True, hide_index=True)
 
     csv = df.to_csv(index=False).encode("utf-8")
     st.download_button("⬇️ Baixar CSV", csv, "dados_filtrados.csv", "text/csv")
@@ -1041,18 +1122,21 @@ with tab5:
     with st.expander("⏸️ KPIs de Ociosidade — Linha 2"):
         st.markdown(
             """
-            Calculados automaticamente para toda a equipe. O maior gap diário de cada
-            usuário (≥ 45 min) é descartado como almoço ou pausa longa.
+            Calculados automaticamente para toda a equipe.
+            O **maior gap ≥ 45 min** de cada dia é descartado como almoço (~1h).
+            Outros gaps ≥ 45 min no mesmo dia são tratados como **ausência grave** e contam
+            como ociosidade real. O % é calculado sobre o **turno efetivo** (total − almoço).
 
             - **% Tempo Ocioso** — Percentual médio do turno sem nenhum evento registrado.
-              Fórmula: `soma dos gaps intra-turno ÷ duração total do turno × 100`.
+              Fórmula: `soma dos gaps intra-turno ÷ turno efetivo × 100`.
                 - 🟢 ≤ 10%: Ótimo · 🟡 10–20%: Atenção · 🔴 > 20%: Crítico.
             - **Maior Gap Médio** — Média do maior intervalo pontual sem evento por usuário.
               Útil para detectar ausências prolongadas durante o expediente.
                 - 🟢 ≤ 15 min: Ótimo · 🟡 15–30 min: Atenção · 🔴 > 30 min: Crítico.
 
-            > A linha **📅 Meta do período** exibida abaixo mostra o cálculo automático
-            > da meta total: `meta diária × dias úteis no período` (domingos excluídos).
+            > Se forem detectadas **ausências graves** (gaps ≥ 45 min fora do almoço),
+            > um aviso em amarelo aparece acima dos gráficos de ociosidade.
+            > Use a **Timeline Individual** (Aba Jornada) para identificar o horário exato.
             """
         )
 
@@ -1081,16 +1165,16 @@ with tab5:
         st.markdown(
             """
             - **Score de Performance** — Indicador composto, normalizado de 0 a 100%:
-              `Score = Peso Volume × (volume normalizado) + Peso Tempo × (1 − tempo normalizado)`
+              `Score = Peso Volume × (volume normalizado) + Peso Velocidade × (1 − tempo normalizado) + Peso Ociosidade × (1 − % ocioso)`
               Os pesos são configuráveis na sidebar em **⚖️ Pesos do Score**.
-              Premia quem entrega **mais volume** com **menor tempo médio**.
+              Premia quem entrega **mais volume** com **menor tempo médio** e **menor ociosidade**.
                 - 🟢 Verde: alto desempenho · 🟡 Amarelo: médio · 🔴 Vermelho: requer atenção.
             - **Atingimento da Meta (%)** — Compara o volume de cada usuário com a
               **meta do período** (diária × dias úteis). A linha de referência marca **100%**.
             - **Volume × Tempo Médio** — Dispersão para identificar perfis:
                 - Canto **superior-esquerdo**: alto volume e rápido (estrelas).
                 - Canto **inferior-direito**: baixo volume e lento (atenção).
-              O tamanho da bolha representa o volume; a cor, o score.
+              O tamanho da bolha representa o volume; a cor, o score. Os nomes aparecem sobre cada ponto.
             """
         )
 
@@ -1102,8 +1186,11 @@ with tab5:
               há intervalo superior a **1 hora** entre eventos.
             - **Timeline Individual** — Linha do tempo detalhada das atividades de um
               usuário específico, separada por tipo de evento. A intensidade da cor
-              representa o volume de eventos em cada bloco. Ideal para **auditoria**
-              e análise de fluxo de trabalho individual.
+              representa o volume de eventos em cada bloco.
+              **Destaque visual de gaps:**
+                - 🟡 Faixa amarela: gap médio entre 15–30 min.
+                - 🔴 Faixa vermelha: gap crítico acima de 30 min.
+                - Faixa cinza: pausa longa ≥ 45 min (excluída da contagem de ociosidade).
             """
         )
 
@@ -1244,11 +1331,23 @@ with tab6:
         else:
             ocio_gap_color, ocio_gap_label = "#16A34A", "Ótimo"
 
-        # Ranking calculado sobre df_user_global (já computado no nível principal)
-        df_rank_fb   = df_user_global.sort_values("score", ascending=False).reset_index(drop=True)
+        # Ranking calculado sobre TODOS os usuários (df_global), não só os filtrados
+        df_user_global = df_global.groupby("user_name").agg({
+            "event_count":        "sum",
+            "event_elapsed_time": "mean",
+        }).reset_index()
+        max_vol_g  = df_user_global["event_count"].max()        or 1
+        max_time_g = df_user_global["event_elapsed_time"].max() or 1
+        df_user_global["score_volume"] = df_user_global["event_count"]        / max_vol_g
+        df_user_global["score_tempo"]  = 1 - (df_user_global["event_elapsed_time"] / max_time_g)
+        df_user_global["score"]        = (
+            df_user_global["score_volume"] * peso_volume
+            + df_user_global["score_tempo"] * peso_tempo
+        )
+        df_rank_fb = df_user_global.sort_values("score", ascending=False).reset_index(drop=True)
         rank_matches = df_rank_fb[df_rank_fb["user_name"] == usuario_fb].index
-        rank_fb      = int(rank_matches[0]) + 1 if len(rank_matches) else "—"
-        total_uf     = len(df_rank_fb)
+        rank_fb = int(rank_matches[0]) + 1 if len(rank_matches) else "—"
+        total_uf   = len(df_rank_fb)
 
         if score_fb >= 70:
             class_fb    = "Alto Desempenho"
@@ -1273,10 +1372,10 @@ with tab6:
         pb4.metric("🏅 Score",              f"{score_fb}%")
 
         pb5, pb6 = st.columns(2)
-        pb5.metric("⏸️ % Tempo Ocioso",    f"{ocio_pct_fb}%",
-                   help="% do turno sem registro de eventos (almoço excluído)")
-        pb6.metric("⚠️ Maior Gap Intra-turno", f"{ocio_gap_fb} min",
-                   help="Maior intervalo pontual sem evento (almoço excluído)")
+        pb5.metric("⏸️ % Tempo Ocioso (média)",    f"{ocio_pct_fb}%",
+                   help="Média diária do % do turno sem registro de eventos (almoço excluído)")
+        pb6.metric("⚠️ Maior Gap Médio (média)", f"{ocio_gap_fb} min",
+                   help="Média do maior gap intra-turno por dia (almoço excluído)")
 
         st.markdown(
             f'<div style="margin:10px 0 18px 0; padding:12px 18px; border-radius:10px; '
@@ -1286,6 +1385,138 @@ with tab6:
             f'</div>',
             unsafe_allow_html=True,
         )
+
+        # ── Detalhamento diário de ociosidade ───────────────────────
+        df_ocio_diario = calc_ociosidade_diaria(df_fb, usuario_fb)
+
+        if not df_ocio_diario.empty and "date" in df_fb.columns:
+            section("⏸️ Detalhamento Diário de Ociosidade")
+
+            # KPIs do pico
+            idx_pico   = df_ocio_diario["pct_ocioso"].idxmax()
+            dia_pico   = df_ocio_diario.loc[idx_pico, "data"]
+            pct_pico   = df_ocio_diario.loc[idx_pico, "pct_ocioso"]
+            gap_pico   = df_ocio_diario.loc[idx_pico, "maior_gap"]
+            dias_criticos  = int((df_ocio_diario["pct_ocioso"] > 20).sum())
+            dias_atencao   = int(((df_ocio_diario["pct_ocioso"] > 10) & (df_ocio_diario["pct_ocioso"] <= 20)).sum())
+            total_ausencias_fb = int(df_ocio_diario["n_ausencias_graves"].sum())
+
+            pk1, pk2, pk3, pk4 = st.columns(4)
+            pk1.metric("📅 Dia de Pico",
+                       dia_pico.strftime("%d/%m/%Y") if hasattr(dia_pico, "strftime") else str(dia_pico),
+                       help="Dia com maior % de ociosidade no período")
+            pk2.metric("🔴 % Ocioso no Pico",   f"{pct_pico}%")
+            pk3.metric("⚠️ Gap no Pico",        f"{gap_pico} min",
+                       help="Maior gap intra-turno no dia de pico")
+            pk4.metric("📆 Dias Críticos (>20%)", dias_criticos,
+                       help="Dias em que o % de ociosidade ficou acima de 20%")
+
+            if total_ausencias_fb > 0:
+                s = "s" if total_ausencias_fb > 1 else ""
+                st.warning(
+                    f"⚠️ {total_ausencias_fb} ausência{s} grave{s} detectada{s} no período "
+                    f"(gap ≥ 45 min fora do horário de almoço)."
+                )
+
+            # Gráficos lado a lado
+            col_d1, col_d2 = st.columns(2)
+
+            with col_d1:
+                st.markdown(
+                    f'<div style="font-size:0.85rem;font-weight:600;color:{COLORS["text"]};margin-bottom:4px;">' +
+                    "% Ocioso por Dia</div>", unsafe_allow_html=True
+                )
+                def _cor_pct(v):
+                    if v > 20: return COLORS["danger"]
+                    if v > 10: return COLORS["warning"]
+                    return COLORS["success"]
+
+                fig_dpct = go.Figure(go.Bar(
+                    x=df_ocio_diario["data"].dt.strftime("%d/%m"),
+                    y=df_ocio_diario["pct_ocioso"],
+                    marker_color=[_cor_pct(v) for v in df_ocio_diario["pct_ocioso"]],
+                    text=df_ocio_diario["pct_ocioso"].apply(lambda v: f"{v}%"),
+                    textposition="outside",
+                    hovertemplate="<b>%{x}</b><br>% Ocioso: %{y}%<extra></extra>",
+                ))
+                fig_dpct.add_hline(y=10, line_dash="dot", line_color=COLORS["warning"],
+                                   annotation_text="Atenção (10%)",
+                                   annotation_font_color=COLORS["warning"])
+                fig_dpct.add_hline(y=20, line_dash="dash", line_color=COLORS["danger"],
+                                   annotation_text="Crítico (20%)",
+                                   annotation_font_color=COLORS["danger"])
+                fig_dpct.update_layout(xaxis_title="", yaxis_title="% ocioso",
+                                       xaxis=dict(tickangle=-35))
+                st.plotly_chart(style_fig(fig_dpct, 300), use_container_width=True)
+
+            with col_d2:
+                st.markdown(
+                    f'<div style="font-size:0.85rem;font-weight:600;color:{COLORS["text"]};margin-bottom:4px;">' +
+                    "Maior Gap por Dia (min)</div>", unsafe_allow_html=True
+                )
+                def _cor_gap(v):
+                    if v > 30: return COLORS["danger"]
+                    if v > 15: return COLORS["warning"]
+                    return COLORS["success"]
+
+                fig_dgap = go.Figure(go.Bar(
+                    x=df_ocio_diario["data"].dt.strftime("%d/%m"),
+                    y=df_ocio_diario["maior_gap"],
+                    marker_color=[_cor_gap(v) for v in df_ocio_diario["maior_gap"]],
+                    text=df_ocio_diario["maior_gap"].apply(lambda v: f"{v:.0f}min"),
+                    textposition="outside",
+                    hovertemplate="<b>%{x}</b><br>Gap: %{y} min<extra></extra>",
+                ))
+                fig_dgap.add_hline(y=15, line_dash="dot", line_color=COLORS["warning"],
+                                   annotation_text="Atenção (15 min)",
+                                   annotation_font_color=COLORS["warning"])
+                fig_dgap.add_hline(y=30, line_dash="dash", line_color=COLORS["danger"],
+                                   annotation_text="Crítico (30 min)",
+                                   annotation_font_color=COLORS["danger"])
+                fig_dgap.update_layout(xaxis_title="", yaxis_title="minutos",
+                                       xaxis=dict(tickangle=-35))
+                st.plotly_chart(style_fig(fig_dgap, 300), use_container_width=True)
+
+            # Tabela detalhada por dia
+            with st.expander("📋 Ver tabela completa por dia"):
+                df_tabela = df_ocio_diario.copy()
+                df_tabela["Data"]              = df_tabela["data"].dt.strftime("%d/%m/%Y")
+                df_tabela["% Ocioso"]          = df_tabela["pct_ocioso"].apply(lambda v: f"{v}%")
+                df_tabela["Maior Gap (min)"]   = df_tabela["maior_gap"].apply(lambda v: f"{v:.0f}")
+                df_tabela["Ocioso Total (min)"]= df_tabela["total_ocio_min"].apply(lambda v: f"{v:.0f}")
+                df_tabela["Almoço (min)"]      = df_tabela["almoco_min"].apply(
+                    lambda v: f"{v:.0f}" if v > 0 else "—"
+                )
+                df_tabela["Ausências Graves"]  = df_tabela["n_ausencias_graves"].apply(
+                    lambda v: f"⚠️ {v}" if v > 0 else "✅ 0"
+                )
+                df_tabela["Gaps Detectados"]   = df_tabela["gaps_detalhe"]
+                st.dataframe(
+                    df_tabela[[
+                        "Data", "% Ocioso", "Maior Gap (min)",
+                        "Ocioso Total (min)", "Almoço (min)",
+                        "Ausências Graves", "Gaps Detectados",
+                    ]],
+                    use_container_width=True, hide_index=True,
+                )
+                csv_ocio = df_tabela[[
+                    "Data", "% Ocioso", "Maior Gap (min)",
+                    "Ocioso Total (min)", "Almoço (min)",
+                    "Ausências Graves", "Gaps Detectados",
+                ]].to_csv(index=False).encode("utf-8")
+                st.download_button(
+                    "⬇️ Exportar CSV de Ociosidade",
+                    csv_ocio,
+                    f"ociosidade_{usuario_fb.replace(' ', '_')}.csv",
+                    "text/csv",
+                )
+
+            # Guarda variáveis para usar no HTML do relatório
+            _ocio_diario_html = df_ocio_diario  # referência para o bloco de impressão
+        else:
+            _ocio_diario_html = None
+            dias_criticos = 0
+            total_ausencias_fb = 0
 
         # ── Botão de gerar relatório ────────────────────────────────
         if st.button("🖨️ Gerar Relatório para Impressão", type="primary", key="btn_print"):
@@ -1308,6 +1539,79 @@ with tab6:
             html_obs = observacoes_gerais.strip() or "<em>Nenhuma observação registrada.</em>"
 
             total_ev_fb_fmt = f"{total_ev_fb:,}".replace(",", ".")
+
+            # ── Monta HTML da tabela de ociosidade diária ──────────
+            if _ocio_diario_html is not None and not _ocio_diario_html.empty:
+                def _cls_pct(v):
+                    if v > 20: return "td-crit"
+                    if v > 10: return "td-warn"
+                    return "td-ok"
+                def _cls_gap(v):
+                    if v > 30: return "td-crit"
+                    if v > 15: return "td-warn"
+                    return "td-ok"
+
+                _rows_html = ""
+                for _, r in _ocio_diario_html.iterrows():
+                    _data_str  = r["data"].strftime("%d/%m/%Y") if hasattr(r["data"], "strftime") else str(r["data"])
+                    _alm_str   = f"{r['almoco_min']:.0f} min" if r["almoco_min"] > 0 else "—"
+                    _aus_str   = f"⚠️ {int(r['n_ausencias_graves'])}" if r["n_ausencias_graves"] > 0 else "✅ 0"
+                    _rows_html += (
+                        f"<tr>"
+                        f"<td>{_data_str}</td>"
+                        f'<td class="{_cls_pct(r["pct_ocioso"])}">{r["pct_ocioso"]}%</td>'
+                        f'<td class="{_cls_gap(r["maior_gap"])}">{r["maior_gap"]:.0f} min</td>'
+                        f"<td>{r['total_ocio_min']:.0f} min</td>"
+                        f"<td>{_alm_str}</td>"
+                        f"<td>{_aus_str}</td>"
+                        f"<td style='text-align:left;font-size:10px;'>{r['gaps_detalhe']}</td>"
+                        f"</tr>"
+                    )
+
+                _pico_idx  = _ocio_diario_html["pct_ocioso"].idxmax()
+                _pico_data = _ocio_diario_html.loc[_pico_idx, "data"]
+                _pico_data_str = _pico_data.strftime("%d/%m/%Y") if hasattr(_pico_data, "strftime") else str(_pico_data)
+                _pico_pct  = _ocio_diario_html.loc[_pico_idx, "pct_ocioso"]
+                _dias_crit = int((_ocio_diario_html["pct_ocioso"] > 20).sum())
+                _dias_anal = len(_ocio_diario_html)
+
+                html_ocio_section = f"""
+<div class="section-title">⏸️ Detalhamento Diário de Ociosidade</div>
+<div class="ocio-summ">
+  <div class="ocio-summ-box">
+    <div class="os-label">Média % Ocioso</div>
+    <div class="os-value" style="color:{ocio_pct_color};">{ocio_pct_fb}%</div>
+    <div class="os-sub">{ocio_pct_label}</div>
+  </div>
+  <div class="ocio-summ-box">
+    <div class="os-label">Dia de Pico</div>
+    <div class="os-value">{_pico_data_str}</div>
+    <div class="os-sub">{_pico_pct}% ocioso nesse dia</div>
+  </div>
+  <div class="ocio-summ-box">
+    <div class="os-label">Dias Críticos (&gt;20%)</div>
+    <div class="os-value" style="color:{"#DC2626" if _dias_crit > 0 else "#16A34A"};">{_dias_crit} / {_dias_anal}</div>
+    <div class="os-sub">dias analisados</div>
+  </div>
+</div>
+<table class="ocio-table">
+  <thead>
+    <tr>
+      <th>Data</th>
+      <th>% Ocioso</th>
+      <th>Maior Gap</th>
+      <th>Total Ocioso</th>
+      <th>Almoço</th>
+      <th>Ausências</th>
+      <th>Gaps detectados (&gt;5 min)</th>
+    </tr>
+  </thead>
+  <tbody>
+    {_rows_html}
+  </tbody>
+</table>"""
+            else:
+                html_ocio_section = "<p style='color:#94A3B8;font-size:11px;'>Dados diários não disponíveis (sem coluna de data).</p>"
 
             html_report = f"""<!DOCTYPE html>
 <html lang="pt-BR">
@@ -1445,6 +1749,29 @@ with tab6:
     display: flex; justify-content: space-between;
   }}
 
+  /* ── Tabela de ociosidade diária ── */
+  .ocio-table {{ width: 100%; border-collapse: collapse; margin-bottom: 14px; font-size: 11px; }}
+  .ocio-table th {{
+    background: #EFF6FF; color: #1E40AF; font-weight: 700;
+    padding: 6px 8px; text-align: center; border: 1px solid #BFDBFE;
+    font-size: 10px; text-transform: uppercase; letter-spacing: .04em;
+  }}
+  .ocio-table td {{
+    padding: 5px 8px; border: 1px solid #E2E8F0; text-align: center; color: #374151;
+  }}
+  .ocio-table tr:nth-child(even) td {{ background: #F8FAFC; }}
+  .ocio-table .td-ok    {{ color: #16A34A; font-weight: 700; }}
+  .ocio-table .td-warn  {{ color: #D97706; font-weight: 700; }}
+  .ocio-table .td-crit  {{ color: #DC2626; font-weight: 700; }}
+  .ocio-summ {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px; }}
+  .ocio-summ-box {{
+    border: 1px solid #E2E8F0; border-radius: 6px; padding: 8px 12px;
+    text-align: center; background: #FAFAFA;
+  }}
+  .ocio-summ-box .os-label {{ font-size: 10px; color: #64748B; margin-bottom: 4px; font-weight: 600; }}
+  .ocio-summ-box .os-value {{ font-size: 15px; font-weight: 800; color: #1A202C; }}
+  .ocio-summ-box .os-sub   {{ font-size: 10px; color: #94A3B8; margin-top: 2px; }}
+
   /* ── Print ── */
   @media print {{
     body {{ padding: 10px 18px; }}
@@ -1536,6 +1863,9 @@ with tab6:
   </div>
   <div class="cl-rank">🏅 Ranking: {rank_fb}º de {total_uf} colaboradores</div>
 </div>
+
+<!-- OCIOSIDADE DIÁRIA -->
+{html_ocio_section}
 
 <!-- OBSERVAÇÕES -->
 <div class="section-title">Observações do Gestor</div>
