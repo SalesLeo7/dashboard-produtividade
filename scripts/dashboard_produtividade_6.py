@@ -942,6 +942,7 @@ max_time = df_user["event_elapsed_time"].max() or 1
 df_user["score_volume"] = df_user["event_count"]        / max_vol
 df_user["score_tempo"]  = 1 - (df_user["event_elapsed_time"] / max_time)
 
+<<<<<<<< HEAD:dashboard_produtividade_5.py
 # Incorpora ociosidade: 0% ocioso → score_ocio = 1.0 | 100% ocioso → 0.0
 df_user = df_user.merge(df_ocio[["user_name", "pct_ocioso"]], on="user_name", how="left")
 df_user["pct_ocioso"] = df_user["pct_ocioso"].fillna(0)
@@ -953,6 +954,9 @@ df_user["score"]  = (
     + df_user["score_ocio"]   * peso_ocio
 )
 df_user["%meta"]  = df_user["event_count"] / META_TOTAL
+
+========
+>>>>>>>> 590f6c089b19dfbc27a61a735b8a287eb301fcfa:scripts/dashboard_produtividade_6.py
 # =========================================================
 # 🧱 GARGALO
 # =========================================================

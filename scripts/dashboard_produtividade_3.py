@@ -20,7 +20,7 @@ st.set_page_config(
 )
 
 # =========================================================
-#  PALETA E TEMA (Dark + Light — estilo Power BI)
+#  PALETA E TEMA — DSV eVisibility + Power BI Dark
 # =========================================================
 THEMES = {
     "dark": {
@@ -42,42 +42,47 @@ THEMES = {
         ],
     },
     "light": {
-        "bg":          "#F4F6F8",
+        "bg":          "#F5F6F8",
         "bg_card":     "#FFFFFF",
         "bg_card_2":   "#F8FAFC",
-        "border":      "#E2E8F0",
-        "text":        "#1A202C",
-        "text_muted":  "#64748B",
-        "primary":     "#0078D4",
-        "accent":      "#00B294",
+        "border":      "#E1E5EB",
+        "text":        "#5A6169",
+        "text_muted":  "#8A9BB0",
+        "primary":     "#002664",
+        "accent":      "#3D5170",
         "warning":     "#D97706",
         "danger":      "#DC2626",
         "success":     "#16A34A",
-        "header_grad": "linear-gradient(120deg, #FFFFFF 0%, #E6F2FB 60%, #FFFFFF 100%)",
+        "header_grad": "linear-gradient(120deg, #FFFFFF 0%, #EEF2F9 60%, #FFFFFF 100%)",
         "heat": [
-            [0.0, "#F4F6F8"], [0.2, "#CDE4F7"], [0.5, "#7FB8E5"],
-            [0.8, "#0078D4"], [1.0, "#003E73"],
+            [0.0, "#F5F6F8"], [0.2, "#C8D3E8"], [0.5, "#7A93C4"],
+            [0.8, "#3D5170"], [1.0, "#002664"],
         ],
     },
 }
 
-# Inicializa o tema antes de qualquer render
+# Inicializa o tema (padrão: claro — DSV eVisibility)
 if "theme_mode" not in st.session_state:
-    st.session_state["theme_mode"] = "dark"
+    st.session_state["theme_mode"] = "light"
 
 THEME = st.session_state["theme_mode"]
 COLORS = THEMES[THEME]
 
-PLOTLY_SEQ = ["#2EA8FF", "#00D4B4", "#F2B441", "#F85149", "#A371F7", "#3FB950", "#FF7B72"] \
-    if THEME == "dark" else \
-    ["#0078D4", "#00B294", "#D97706", "#DC2626", "#7C3AED", "#16A34A", "#E11D48"]
+PLOTLY_SEQ = (
+    ["#2EA8FF", "#00D4B4", "#F2B441", "#F85149", "#A371F7", "#3FB950", "#FF7B72"]
+    if THEME == "dark" else
+    ["#002664", "#3D5170", "#D97706", "#DC2626", "#7C3AED", "#16A34A", "#E11D48"]
+)
 
 PLOTLY_HEAT = COLORS["heat"]
 
 PLOTLY_LAYOUT = dict(
     paper_bgcolor=COLORS["bg_card"],
     plot_bgcolor=COLORS["bg_card"],
-    font=dict(family="Segoe UI, Inter, sans-serif", color=COLORS["text"], size=13),
+    font=dict(
+        family='-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif',
+        color=COLORS["text"], size=13,
+    ),
     margin=dict(l=20, r=20, t=40, b=20),
     xaxis=dict(gridcolor=COLORS["border"], zerolinecolor=COLORS["border"]),
     yaxis=dict(gridcolor=COLORS["border"], zerolinecolor=COLORS["border"]),
@@ -85,61 +90,74 @@ PLOTLY_LAYOUT = dict(
 )
 
 # =========================================================
-#  CSS CUSTOMIZADO
+#  CSS CUSTOMIZADO — DSV eVisibility + Power BI Dark
 # =========================================================
 st.markdown(f"""
 <style>
-    .stApp {{
-        background: {COLORS["bg"]};
+    /* ── Reset e base ── */
+    *, *::before, *::after {{ box-sizing: border-box; }}
+    html, body, .stApp {{
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        font-size: 15px;
         color: {COLORS["text"]};
+        background-color: {COLORS["bg"]};
     }}
+    .stApp {{ background-color: {COLORS["bg"]}; }}
 
-    /* Sidebar */
-    section[data-testid="stSidebar"] {{
-        background: {COLORS["bg_card"]};
-        border-right: 1px solid {COLORS["border"]};
-    }}
-    section[data-testid="stSidebar"] * {{ color: {COLORS["text"]} !important; }}
+    /* Oculta menu hamburger, rodapé e header nativo do Streamlit */
+    #MainMenu, footer, header {{ visibility: hidden; }}
+    .block-container {{ padding-top: 1rem !important; padding-bottom: 1rem !important; }}
 
-    /* Headings */
-    h1, h2, h3, h4 {{
-        color: {COLORS["text"]} !important;
-        font-family: 'Segoe UI', 'Inter', sans-serif;
+    /* ── Headings ── */
+    h1, h2, h3, h4, h5, h6 {{
+        color: {COLORS["primary"]} !important;
+        font-family: inherit;
         letter-spacing: -0.01em;
     }}
 
-    /* KPI cards */
+    /* ── Sidebar ── */
+    section[data-testid="stSidebar"] {{
+        background-color: {COLORS["bg_card"]};
+        box-shadow: rgba(90,97,105,0.12) 2px 0px 10px 0px;
+        border-right: none !important;
+    }}
+    section[data-testid="stSidebar"] * {{ color: {COLORS["text"]} !important; }}
+
+    /* ── KPI cards ── */
     div[data-testid="stMetric"] {{
-        background: linear-gradient(145deg, {COLORS["bg_card"]} 0%, {COLORS["bg_card_2"]} 100%);
-        border: 1px solid {COLORS["border"]};
+        background: {COLORS["bg_card"]};
+        border: none;
         border-left: 3px solid {COLORS["primary"]};
-        padding: 18px 20px;
         border-radius: 10px;
-        box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+        padding: 16px 20px;
+        box-shadow: rgba(90,97,105,0.11) 0px 2px 0px,
+                    rgba(90,97,105,0.12) 0px 4px 8px,
+                    rgba(90,97,105,0.06) 0px 10px 10px,
+                    rgba(90,97,105,0.08) 0px 7px 70px;
         transition: transform .15s ease, box-shadow .15s ease;
     }}
     div[data-testid="stMetric"]:hover {{
         transform: translateY(-2px);
-        box-shadow: 0 6px 22px rgba(46,168,255,0.18);
+        box-shadow: rgba(90,97,105,0.18) 0px 6px 24px;
     }}
     div[data-testid="stMetricLabel"] p {{
         color: {COLORS["text_muted"]} !important;
-        font-size: 0.78rem !important;
+        font-size: 0.75rem !important;
         text-transform: uppercase;
         letter-spacing: 0.08em;
         font-weight: 600;
     }}
     div[data-testid="stMetricValue"] {{
-        color: {COLORS["text"]} !important;
-        font-size: 1.9rem !important;
+        color: {COLORS["primary"]} !important;
+        font-size: 1.75rem !important;
         font-weight: 700 !important;
     }}
 
-    /* Section titles */
+    /* ── Section titles ── */
     .section-title {{
-        font-size: 1.05rem;
+        font-size: 1rem;
         font-weight: 600;
-        color: {COLORS["text"]};
+        color: {COLORS["primary"]};
         padding: 6px 0 10px 0;
         border-bottom: 1px solid {COLORS["border"]};
         margin: 8px 0 14px 0;
@@ -148,42 +166,81 @@ st.markdown(f"""
     .section-title .dot {{
         width: 8px; height: 8px; border-radius: 50%;
         background: {COLORS["primary"]};
-        box-shadow: 0 0 10px {COLORS["primary"]};
+        box-shadow: 0 0 8px {COLORS["accent"]};
+        flex-shrink: 0;
     }}
 
-    /* Header banner */
+    /* ── Header banner (top bar) ── */
     .header-banner {{
-        background: {COLORS["header_grad"]};
-        border: 1px solid {COLORS["border"]};
-        border-radius: 12px;
-        padding: 22px 26px;
+        background: {COLORS["bg_card"]};
+        border: none;
+        border-radius: 10px;
+        padding: 18px 24px;
         margin-bottom: 18px;
-        display: flex; flex-direction: column; gap: 4px;
+        display: flex; align-items: center; justify-content: space-between;
+        box-shadow: rgba(90,97,105,0.11) 0px 2px 0px,
+                    rgba(90,97,105,0.12) 0px 4px 8px,
+                    rgba(90,97,105,0.06) 0px 10px 10px;
     }}
     .header-banner h1 {{
-        margin: 0; font-size: 1.6rem; font-weight: 700;
+        margin: 0; font-size: 1.35rem; font-weight: 600;
+        color: {COLORS["primary"]} !important;
     }}
     .header-banner p {{
-        margin: 0; color: {COLORS["text_muted"]}; font-size: 0.9rem;
+        margin: 4px 0 0 0; color: {COLORS["text_muted"]}; font-size: 0.85rem;
+    }}
+    .header-badge {{
+        background: {COLORS["bg"]};
+        border: 1px solid {COLORS["border"]};
+        border-radius: 20px;
+        padding: 5px 14px;
+        font-size: 0.75rem;
+        color: {COLORS["accent"]};
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        white-space: nowrap;
     }}
 
-    /* Dataframe wrapper */
+    /* ── Card wrapper (seções de conteúdo) ── */
+    .dsv-card {{
+        background: {COLORS["bg_card"]};
+        border-radius: 10px;
+        border: none;
+        box-shadow: rgba(90,97,105,0.11) 0px 2px 0px,
+                    rgba(90,97,105,0.12) 0px 4px 8px,
+                    rgba(90,97,105,0.06) 0px 10px 10px,
+                    rgba(90,97,105,0.10) 0px 7px 70px;
+        margin-bottom: 16px;
+        padding: 16px 20px;
+    }}
+    .dsv-card-header {{
+        background: {COLORS["bg_card"]};
+        border-bottom: 1px solid {COLORS["border"]};
+        border-radius: 10px 10px 0 0;
+        padding: 10px 16px;
+        display: flex; justify-content: space-between; align-items: center;
+        font-size: 1rem; font-weight: 500; color: {COLORS["primary"]};
+    }}
+
+    /* ── Dataframe wrapper ── */
     div[data-testid="stDataFrame"] {{
         border: 1px solid {COLORS["border"]};
         border-radius: 10px;
         overflow: hidden;
+        box-shadow: rgba(90,97,105,0.08) 0px 2px 8px;
     }}
 
-    /* Divider */
+    /* ── Divider ── */
     hr {{ border-color: {COLORS["border"]} !important; }}
 
-    /* Tabs */
+    /* ── Tabs ── */
     .stTabs [data-baseweb="tab-list"] {{
         gap: 4px;
         background: {COLORS["bg_card"]};
         border-radius: 10px;
         padding: 4px;
         border: 1px solid {COLORS["border"]};
+        box-shadow: rgba(90,97,105,0.08) 0px 2px 6px;
     }}
     .stTabs [data-baseweb="tab"] {{
         background: transparent;
@@ -191,25 +248,30 @@ st.markdown(f"""
         border-radius: 8px;
         padding: 8px 16px;
         font-weight: 500;
+        font-size: 0.88rem;
     }}
     .stTabs [aria-selected="true"] {{
         background: {COLORS["primary"]} !important;
-        color: white !important;
+        color: #FFFFFF !important;
     }}
 
-    /* Inputs */
-    .stMultiSelect div[data-baseweb="select"], .stSelectbox div[data-baseweb="select"] {{
+    /* ── Inputs e selects ── */
+    .stMultiSelect div[data-baseweb="select"],
+    .stSelectbox div[data-baseweb="select"] {{
         background: {COLORS["bg_card_2"]} !important;
         border-color: {COLORS["border"]} !important;
+        border-radius: 6px !important;
     }}
 
-    /* Scrollbar */
-    ::-webkit-scrollbar {{ width: 10px; height: 10px; }}
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar {{ width: 8px; height: 8px; }}
     ::-webkit-scrollbar-track {{ background: {COLORS["bg"]}; }}
-    ::-webkit-scrollbar-thumb {{ background: {COLORS["border"]}; border-radius: 6px; }}
-    ::-webkit-scrollbar-thumb:hover {{ background: {COLORS["primary"]}; }}
+    ::-webkit-scrollbar-thumb {{
+        background: {COLORS["border"]}; border-radius: 6px;
+    }}
+    ::-webkit-scrollbar-thumb:hover {{ background: {COLORS["accent"]}; }}
 
-    /* Sidebar — branding e seções */
+    /* ── Sidebar — branding ── */
     .sb-brand {{
         display: flex; align-items: center; gap: 10px;
         padding: 6px 4px 14px 4px;
@@ -217,22 +279,23 @@ st.markdown(f"""
         margin-bottom: 14px;
     }}
     .sb-brand .logo {{
-        width: 34px; height: 34px; border-radius: 8px;
+        width: 36px; height: 36px; border-radius: 8px;
         background: linear-gradient(135deg, {COLORS["primary"]} 0%, {COLORS["accent"]} 100%);
         display: flex; align-items: center; justify-content: center;
-        font-size: 18px; box-shadow: 0 4px 14px rgba(46,168,255,0.35);
+        font-size: 18px;
+        box-shadow: rgba(90,97,105,0.18) 0px 4px 12px;
     }}
     .sb-brand .title {{
-        font-size: 0.95rem; font-weight: 700; color: {COLORS["text"]};
+        font-size: 0.95rem; font-weight: 700; color: {COLORS["primary"]};
         line-height: 1.1;
     }}
     .sb-brand .subtitle {{
-        font-size: 0.72rem; color: {COLORS["text_muted"]};
+        font-size: 0.7rem; color: {COLORS["text_muted"]};
         text-transform: uppercase; letter-spacing: 0.08em;
     }}
 
     .sb-section-label {{
-        font-size: 0.7rem;
+        font-size: 0.68rem;
         text-transform: uppercase;
         letter-spacing: 0.1em;
         color: {COLORS["text_muted"]} !important;
@@ -241,28 +304,24 @@ st.markdown(f"""
         padding-left: 2px;
     }}
 
-    /* Upload card no rodapé da sidebar */
+    /* ── Upload card na sidebar ── */
     .sb-upload-wrap {{
         margin-top: 10px;
         padding: 12px;
         background: {COLORS["bg_card_2"]};
         border: 1px dashed {COLORS["border"]};
-        border-radius: 10px;
+        border-radius: 8px;
     }}
     .sb-upload-title {{
-        font-size: 0.78rem;
-        font-weight: 600;
-        color: {COLORS["text"]};
+        font-size: 0.78rem; font-weight: 600;
+        color: {COLORS["primary"]};
         display: flex; align-items: center; gap: 6px;
         margin-bottom: 4px;
     }}
     .sb-upload-hint {{
-        font-size: 0.7rem;
-        color: {COLORS["text_muted"]};
-        margin-bottom: 8px;
+        font-size: 0.7rem; color: {COLORS["text_muted"]}; margin-bottom: 8px;
     }}
 
-    /* Compactar o file_uploader dentro da sidebar */
     section[data-testid="stSidebar"] [data-testid="stFileUploader"] section {{
         background: {COLORS["bg_card"]};
         border: 1px solid {COLORS["border"]};
@@ -282,31 +341,43 @@ st.markdown(f"""
         padding: 4px 12px !important;
     }}
 
-    /* Status do arquivo carregado */
+    /* ── Status arquivo carregado ── */
     .sb-file-status {{
         display: flex; align-items: center; gap: 8px;
-        background: rgba(63,185,80,0.08);
-        border: 1px solid rgba(63,185,80,0.3);
+        background: rgba(22,163,74,0.06);
+        border: 1px solid rgba(22,163,74,0.25);
         border-radius: 8px;
-        padding: 8px 10px;
-        margin-top: 8px;
-        font-size: 0.75rem;
-        color: {COLORS["success"]};
+        padding: 8px 10px; margin-top: 8px;
+        font-size: 0.75rem; color: {COLORS["success"]};
     }}
     .sb-file-status .dot-ok {{
         width: 8px; height: 8px; border-radius: 50%;
         background: {COLORS["success"]};
-        box-shadow: 0 0 8px {COLORS["success"]};
     }}
 
-    /* Footer da sidebar */
+    /* ── Footer da sidebar ── */
     .sb-footer {{
-        margin-top: 18px;
-        padding-top: 10px;
+        margin-top: 18px; padding-top: 10px;
         border-top: 1px solid {COLORS["border"]};
-        font-size: 0.68rem;
-        color: {COLORS["text_muted"]};
+        font-size: 0.66rem; color: {COLORS["text_muted"]};
         text-align: center;
+    }}
+
+    /* ── Botões primários ── */
+    .stButton > button[kind="primary"] {{
+        background-color: {COLORS["primary"]} !important;
+        border: none !important;
+        border-radius: 6px !important;
+        font-size: 13px !important;
+        font-weight: 500 !important;
+        color: #FFFFFF !important;
+    }}
+    .stButton > button[kind="secondary"] {{
+        border: 1px solid {COLORS["border"]} !important;
+        border-radius: 6px !important;
+        font-size: 13px !important;
+        color: {COLORS["text"]} !important;
+        background: {COLORS["bg_card"]} !important;
     }}
 </style>
 """, unsafe_allow_html=True)
@@ -375,8 +446,11 @@ def load_data(file_bytes: bytes) -> pd.DataFrame:
 # =========================================================
 st.markdown(f"""
 <div class="header-banner">
-    <h1>📊 Dashboard de Produtividade</h1>
-    <p>Visão executiva por usuário · análise de jornada, volume e performance</p>
+    <div>
+        <h1>📊 Dashboard de Produtividade</h1>
+        <p>Visão executiva por usuário · análise de jornada, volume e performance</p>
+    </div>
+    <div class="header-badge">Painel Gestor</div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -666,6 +740,26 @@ df_user["score_tempo"]  = 1 - (df_user["event_elapsed_time"] / max_time)
 df_user["score"]        = df_user["score_volume"] * peso_volume + df_user["score_tempo"] * peso_tempo
 df_user["%meta"]        = df_user["event_count"] / META_TOTAL
 
+# Score global — calculado contra TODOS os usuários (df_global),
+# independente do filtro de usuário. Usado no ranking de performance
+# para que a posição de cada pessoa reflita a equipe inteira.
+df_user_global = df_global.groupby("user_name").agg({
+    "event_count":        "sum",
+    "event_elapsed_time": "mean",
+}).reset_index()
+_max_vol_g  = df_user_global["event_count"].max()        or 1
+_max_time_g = df_user_global["event_elapsed_time"].max() or 1
+df_user_global["score_volume"] = df_user_global["event_count"]        / _max_vol_g
+df_user_global["score_tempo"]  = 1 - (df_user_global["event_elapsed_time"] / _max_time_g)
+df_user_global["score"]        = (
+    df_user_global["score_volume"] * peso_volume
+    + df_user_global["score_tempo"] * peso_tempo
+)
+df_user_global["%meta"] = df_user_global["event_count"] / META_TOTAL
+# Marca quais usuários estão no filtro ativo (ou todos, se nenhum filtro)
+_usuarios_filtrados = set(df_user["user_name"].tolist())
+df_user_global["selecionado"] = df_user_global["user_name"].isin(_usuarios_filtrados)
+
 # =========================================================
 # 🧱 GARGALO
 # =========================================================
@@ -799,21 +893,49 @@ with tab1:
 
 # ----- TAB 2: PERFORMANCE -----
 with tab2:
-    section("Ranking de Performance (Score)")
+    section("Ranking de Performance (Score) — Equipe Completa")
 
-    df_rank = df_user.sort_values("score", ascending=False).copy()
+    df_rank = df_user_global.sort_values("score", ascending=False).copy()
     df_rank["score_pct"] = (df_rank["score"] * 100).round(1)
+    df_rank["posicao"]   = range(1, len(df_rank) + 1)
 
-    fig_rank = px.bar(
-        df_rank, x="score_pct", y="user_name", orientation="h",
-        color="score_pct", color_continuous_scale=[[0, COLORS["danger"]],
-                                                   [0.5, COLORS["warning"]],
-                                                   [1, COLORS["success"]]],
-        text="score_pct",
-    )
-    fig_rank.update_traces(texttemplate="%{text:.1f}", textposition="outside")
-    fig_rank.update_layout(yaxis=dict(autorange="reversed"), coloraxis_showscale=False)
-    st.plotly_chart(style_fig(fig_rank, max(320, 28 * len(df_rank))), use_container_width=True)
+    _filtro_ativo = len(_usuarios_filtrados) < len(df_user_global)
+
+    # Cor: destaque para selecionados, cinza para os demais
+    def _rank_color(row):
+        if not _filtro_ativo or row["selecionado"]:
+            v = row["score_pct"] / 100
+            if v >= 0.7:   return COLORS["success"]
+            elif v >= 0.4: return COLORS["warning"]
+            else:          return COLORS["danger"]
+        return COLORS["border"]   # cinza para não selecionados
+
+    def _rank_opacity(row):
+        return 1.0 if (not _filtro_ativo or row["selecionado"]) else 0.35
+
+    bar_colors   = [_rank_color(r)   for _, r in df_rank.iterrows()]
+    bar_opacities = [_rank_opacity(r) for _, r in df_rank.iterrows()]
+
+    fig_rank = go.Figure(go.Bar(
+        x=df_rank["score_pct"],
+        y=df_rank["user_name"],
+        orientation="h",
+        marker=dict(color=bar_colors, opacity=bar_opacities),
+        text=df_rank.apply(
+            lambda r: f"{r['score_pct']:.1f}  (#{r['posicao']}º)", axis=1
+        ),
+        textposition="outside",
+        hovertemplate="<b>%{y}</b><br>Score: %{x:.1f}%<extra></extra>",
+    ))
+    fig_rank.update_layout(yaxis=dict(autorange="reversed"), xaxis_title="Score (%)")
+
+    if _filtro_ativo:
+        nomes = ", ".join(sorted(_usuarios_filtrados))
+        st.caption(
+            f"🔍 Filtro ativo: **{nomes}** destacado(s). "
+            "Os demais colaboradores aparecem em cinza para referência de posição."
+        )
+    st.plotly_chart(style_fig(fig_rank, max(320, 24 * len(df_rank))), use_container_width=True)
 
     col_a, col_b = st.columns(2)
     with col_a:
@@ -1122,23 +1244,11 @@ with tab6:
         else:
             ocio_gap_color, ocio_gap_label = "#16A34A", "Ótimo"
 
-        # Ranking calculado sobre TODOS os usuários (df_global), não só os filtrados
-        df_user_global = df_global.groupby("user_name").agg({
-            "event_count":        "sum",
-            "event_elapsed_time": "mean",
-        }).reset_index()
-        max_vol_g  = df_user_global["event_count"].max()        or 1
-        max_time_g = df_user_global["event_elapsed_time"].max() or 1
-        df_user_global["score_volume"] = df_user_global["event_count"]        / max_vol_g
-        df_user_global["score_tempo"]  = 1 - (df_user_global["event_elapsed_time"] / max_time_g)
-        df_user_global["score"]        = (
-            df_user_global["score_volume"] * peso_volume
-            + df_user_global["score_tempo"] * peso_tempo
-        )
-        df_rank_fb = df_user_global.sort_values("score", ascending=False).reset_index(drop=True)
+        # Ranking calculado sobre df_user_global (já computado no nível principal)
+        df_rank_fb   = df_user_global.sort_values("score", ascending=False).reset_index(drop=True)
         rank_matches = df_rank_fb[df_rank_fb["user_name"] == usuario_fb].index
-        rank_fb = int(rank_matches[0]) + 1 if len(rank_matches) else "—"
-        total_uf   = len(df_rank_fb)
+        rank_fb      = int(rank_matches[0]) + 1 if len(rank_matches) else "—"
+        total_uf     = len(df_rank_fb)
 
         if score_fb >= 70:
             class_fb    = "Alto Desempenho"
