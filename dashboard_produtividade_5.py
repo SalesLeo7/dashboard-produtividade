@@ -10,6 +10,29 @@ import plotly.express as px
 import plotly.graph_objects as go
 
 # =========================================================
+#  CONSTANTES DE NEGÓCIO — OCIOSIDADE / ALMOÇO
+# =========================================================
+ALMOCO_MIN_MIN  = 40   # gap mínimo (min) para ser considerado almoço
+ALMOCO_MIN_MAX  = 60   # gap máximo (min) para ser considerado almoço (acima = ausência grave)
+GAP_OCIOSO_MIN  = 15   # gap mínimo (min) para contar como ociosidade real
+                        # gaps menores = ritmo normal de trabalho (ciclo, deslocamento)
+
+def _eh_almoco(gap: float) -> bool:
+    """True se o gap (em minutos) está na faixa de almoço válido (40–60 min)."""
+    return ALMOCO_MIN_MIN <= gap <= ALMOCO_MIN_MAX
+
+def _identificar_almoco(gaps_sorted: list) -> tuple:
+    """
+    Dado gaps_sorted (decrescente), retorna (almoco_min, gaps_intra).
+    Descarta como almoço o MAIOR gap dentro da faixa [40, 60] min — apenas 1 vez.
+    Gaps > 60 min são ausências graves e permanecem em gaps_intra.
+    """
+    alm_idx = next((i for i, g in enumerate(gaps_sorted) if _eh_almoco(g)), None)
+    if alm_idx is not None:
+        return gaps_sorted[alm_idx], gaps_sorted[:alm_idx] + gaps_sorted[alm_idx + 1:]
+    return 0.0, gaps_sorted
+
+# =========================================================
 #  CONFIGURAÇÃO DA PÁGINA
 # =========================================================
 st.set_page_config(
@@ -331,40 +354,107 @@ def style_fig(fig, height: int = 360, title: str | None = None):
 # =========================================================
 @st.cache_data(show_spinner="Carregando dados...")
 def load_data(file_bytes: bytes) -> pd.DataFrame:
-    df = pd.read_excel(io.BytesIO(file_bytes))
+    # Detecta automaticamente a aba com dados (ignora abas vazias).
+    # Necessário pois o arquivo pode ter Sheet1 vazia antes da aba real.
+    _xl    = pd.ExcelFile(io.BytesIO(file_bytes))
+    _sheet = next(
+        (s for s in _xl.sheet_names
+         if not pd.read_excel(io.BytesIO(file_bytes), sheet_name=s, nrows=1).empty),
+        _xl.sheet_names[0],   # fallback: primeira aba
+    )
+    df = pd.read_excel(io.BytesIO(file_bytes), sheet_name=_sheet)
+
+    # Normaliza nomes de colunas: minúsculas, sem colchetes, underscores
     df.columns = (
         df.columns.str.lower().str.strip()
         .str.replace(r"[\[\]]", "", regex=True)
-        .str.replace(" ", "_")
+        .str.replace(r"\s+", "_", regex=True)
     )
+
     rename_dict = {
         "useruser_name":                       "user_name",
         "event_typeevent_type_name":           "event_type_name",
         "time_event_datetime_hour_interval":   "time_hour_interval",
+        "time_event_datetime_key":             "time_key",      # HH:MM:SS exato
+        "time_event_datetime_hour":            "time_hour",
         "calendar_event_datedate":             "date",
         "event_count":                         "event_count",
         "event_elapsed_time_avg":              "event_elapsed_time",
+        "event_elapsed_time_hhmmss":           "event_elapsed_hhmmss",
         "clientclient_id":                     "client_id",
+        "sitesite_country_id":                 "site_country_id",
+        "sitesite_id":                         "site_id",
     }
     df = df.rename(columns=rename_dict)
 
-    # ----- FIX: remove movimentações automáticas do sistema -----
-    # Usuários cujo nome é "?" representam ações internas e não devem
-    # aparecer nas análises de produtividade da equipe.
+    # ----- Remove movimentações automáticas do sistema -----
     if "user_name" in df.columns:
         df = df[df["user_name"].notna()]
         df = df[df["user_name"].astype(str).str.strip() != "?"]
 
-    # ----- FIX: parsing de horários dentro do cache -----
-    if "time_hour_interval" in df.columns:
+    # ----- Parsing de date -----
+    if "date" in df.columns:
+        df["date"] = pd.to_datetime(df["date"], errors="coerce")
+
+    # ─────────────────────────────────────────────────────────────────
+    # PARSING DE HORA_INICIO / HORA_FIM
+    #
+    # Caminho 1 (preferido): time_key (HH:MM:SS) + date → datetime exato.
+    #   Exemplo: date="2026-01-15" + time_key="09:32:45" → 2026-01-15 09:32:45
+    #   Garante precisão de segundos e agrupamento correto por dia.
+    #
+    # Caminho 2 (fallback): extrai HH:MM do time_hour_interval.
+    #   Usado quando time_key não está disponível.
+    #   Regex aceita 1 ou 2 dígitos na hora (ex: "5:00-5:59" e "22:00-22:59").
+    # ─────────────────────────────────────────────────────────────────
+
+    has_time_key = (
+        "time_key" in df.columns
+        and "date" in df.columns
+        and df["time_key"].notna().any()
+    )
+
+    if has_time_key:
+        # Garante string limpa de time_key (pode vir como object, str ou time)
+        tk_str   = df["time_key"].astype(str).str.strip().str.extract(
+            r"(\d{1,2}:\d{2}:\d{2})", expand=False
+        ).fillna(df["time_key"].astype(str).str.strip())
+
+        # Garante string de date (NaT vira "NaT" → cai em errors="coerce")
+        date_str = df["date"].dt.strftime("%Y-%m-%d")
+
         df["hora_inicio"] = pd.to_datetime(
-            df["time_hour_interval"].str.extract(r"(\d{2}:\d{2})")[0],
-            format="%H:%M",
+            date_str + " " + tk_str, errors="coerce"
+        )
+
+        # hora_fim = inicio + elapsed_time (mín. 5 min para visibilidade no Gantt)
+        if "event_elapsed_time" in df.columns:
+            elapsed_s = df["event_elapsed_time"].fillna(0).clip(lower=0)
+        else:
+            elapsed_s = pd.Series(0, index=df.index, dtype=float)
+
+        df["hora_fim"] = df["hora_inicio"] + pd.to_timedelta(
+            elapsed_s.clip(lower=300), unit="s"
+        )
+
+    elif "time_hour_interval" in df.columns:
+        # ── Fallback: usa o intervalo horário (ex: "5:00-5:59", "22:00-22:59") ──
+        # Converte para string antes de qualquer operação .str (evita o erro
+        # "Can only use .str accessor with string values!").
+        # Regex \d{1,2}:\d{2} aceita hora com 1 ou 2 dígitos.
+        hi_str = df["time_hour_interval"].astype(str)
+        df["hora_inicio"] = pd.to_datetime(
+            hi_str.str.extract(r"(\d{1,2}:\d{2})", expand=False),
+            format="%H:%M", errors="coerce",
         )
         df["hora_fim"] = pd.to_datetime(
-            df["time_hour_interval"].str.extract(r"-(\d{2}:\d{2})")[0],
-            format="%H:%M",
+            hi_str.str.extract(r"-(\d{1,2}:\d{2})", expand=False),
+            format="%H:%M", errors="coerce",
         )
+
+    # Remove linhas sem hora_inicio válida e ordena
+    if "hora_inicio" in df.columns:
+        df = df[df["hora_inicio"].notna()]
         df = df.sort_values("hora_inicio")
 
     return df
@@ -460,20 +550,41 @@ clientes = st.sidebar.multiselect(
     placeholder="Todos os clientes",
 )
 
-# FIX: filtro de data com suporte a intervalo (range) e data única
-if "date" in df.columns:
-    df["date"] = pd.to_datetime(df["date"], errors="coerce")
+# Filtro de Site — exibido só quando há mais de um site
+if "site_id" in df.columns and df["site_id"].nunique() > 1:
+    sites = st.sidebar.multiselect(
+        "Site",
+        sorted(df["site_id"].dropna().unique()),
+        placeholder="Todos os sites",
+    )
+else:
+    sites = []
+
+# Filtro de data — usa hora_inicio quando time_key disponível (mais preciso)
+_date_col_avail = "hora_inicio" in df.columns and df["hora_inicio"].notna().any()
+if _date_col_avail or "date" in df.columns:
     datas = st.sidebar.date_input("Data", [])
     if datas:
         if isinstance(datas, (list, tuple)) and len(datas) == 2:
             start = pd.to_datetime(datas[0])
-            end   = pd.to_datetime(datas[1])
-            df = df[(df["date"] >= start) & (df["date"] <= end)]
-        else:
-            df = df[df["date"].isin(pd.to_datetime(list(datas)))]
+            end   = pd.to_datetime(datas[1]) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
+            if _date_col_avail:
+                df = df[(df["hora_inicio"] >= start) & (df["hora_inicio"] <= end)]
+            else:
+                df["date"] = pd.to_datetime(df["date"], errors="coerce")
+                df = df[(df["date"] >= start) & (df["date"] <= end)]
+        elif len(datas) == 1:
+            d = pd.to_datetime(datas[0])
+            if _date_col_avail:
+                df = df[df["hora_inicio"].dt.normalize() == d]
+            else:
+                df["date"] = pd.to_datetime(df["date"], errors="coerce")
+                df = df[df["date"].dt.normalize() == d]
 
 if eventos:  df = df[df["event_type_name"].isin(eventos)]
 if clientes: df = df[df["client_id"].isin(clientes)]
+if sites and "site_id" in df.columns:
+    df = df[df["site_id"].isin(sites)]
 
 # Salva ANTES do filtro de usuário — usado para ranking global no relatório de feedback
 df_global = df.copy()
@@ -487,12 +598,30 @@ if usuarios: df = df[df["user_name"].isin(usuarios)]
 st.sidebar.markdown('<div class="sb-section-label">🎯 Configurações</div>', unsafe_allow_html=True)
 META_DIARIA = st.sidebar.number_input("Meta diária de eventos por usuário", value=100, min_value=1, help="Quantidade de eventos esperada por dia útil (domingos excluídos automaticamente)")
 
+GAP_OCIOSO_MIN = st.sidebar.number_input(
+    "Limiar de gap ocioso (min)",
+    min_value=5, max_value=60, value=15, step=5,
+    help=(
+        "Gaps menores que este valor são ritmo normal de trabalho (ciclo, deslocamento) "
+        "e NÃO contam como ociosidade. "
+        "Gaps ≥ este valor contam. Padrão: 15 min."
+    ),
+)
+
 with st.sidebar.expander("⚖️ Pesos do Score"):
     peso_volume = st.slider(
-        "Peso — Volume (%)", min_value=0, max_value=100, value=60, step=5,
+        "Peso — Volume (%)", min_value=0, max_value=90, value=55, step=5,
     ) / 100
-    peso_tempo = round(1 - peso_volume, 2)
-    st.caption(f"Tempo: {int(peso_tempo * 100)}% (complementar automático)")
+    peso_ocio_raw = st.slider(
+        "Peso — Ociosidade (%)", min_value=0, max_value=40, value=15, step=5,
+        help="Penaliza usuários com alto tempo ocioso. 0% = ociosidade não afeta o score.",
+    ) / 100
+    peso_tempo = max(round(1 - peso_volume - peso_ocio_raw, 2), 0.0)
+    peso_ocio  = round(1 - peso_volume - peso_tempo, 2)
+    st.caption(
+        f"Velocidade: {int(peso_tempo * 100)}% (complementar automático) · "
+        f"Ociosidade: {int(peso_ocio * 100)}%"
+    )
 
 # =========================================================
 # 📁 FONTE DE DADOS (rodapé da sidebar — discreto)
@@ -539,9 +668,13 @@ if df.empty:
 # 📅 DIAS ÚTEIS E META DO PERÍODO
 # Conta os dias únicos presentes nos dados filtrados,
 # excluindo domingos (weekday == 6).
-# META_TOTAL = META_DIARIA × dias_uteis
+# META_TOTAL = META_DIÁRIA × dias_uteis
 # =========================================================
-if "date" in df.columns:
+# Usa hora_inicio (exato) para derivar datas únicas — mais confiável que date separado
+if "hora_inicio" in df.columns and df["hora_inicio"].notna().any():
+    datas_unicas = df["hora_inicio"].dt.normalize().dropna().unique()
+    dias_uteis   = int((pd.DatetimeIndex(datas_unicas).dayofweek != 6).sum())
+elif "date" in df.columns:
     datas_unicas = pd.to_datetime(df["date"].dropna().dt.normalize().unique())
     dias_uteis   = int((datas_unicas.dayofweek != 6).sum())
 else:
@@ -551,56 +684,201 @@ dias_uteis  = max(dias_uteis, 1)          # garante mínimo 1 dia
 META_TOTAL  = META_DIARIA * dias_uteis    # meta real do período selecionado
 
 # =========================================================
-# ⏸️ TEMPO OCIOSO  (% do turno + maior gap intra-turno)
+# ⏸️ TEMPO Ocioso (% do turno + maior gap intra-turno)
 #
 # Para cada usuário:
 #   1. Calcula todos os gaps positivos entre hora_fim[i] e hora_inicio[i+1]
-#   2. Identifica o maior gap; se ≥ 45 min → descartado como almoço/pausa longa
+#   2. Identifica o gap na faixa [40–60 min] → descartado como almoço (1 vez por dia)
 #   3. Dos gaps restantes:
 #        pct_ocioso = soma(gaps) / duração_total_turno × 100
 #        maior_gap  = max(gaps)  — maior ausência pontual intra-turno
 # =========================================================
 def calc_ociosidade(df_in: pd.DataFrame) -> pd.DataFrame:
-    rows = []
-    for user, grp in df_in.groupby("user_name"):
-        grp = grp.sort_values("hora_inicio").reset_index(drop=True)
+    """
+    Calcula ociosidade por usuário usando hora_inicio (exato, de time_key).
 
-        # Duração total do turno (primeiro início → último fim)
-        turno_min = (grp["hora_fim"].iloc[-1] - grp["hora_inicio"].iloc[0]).total_seconds() / 60
+    Regras de negócio:
+      • Agrupa por (user_name, dia) — dia derivado de hora_inicio.dt.normalize().
+      • Usa cálculo vetorizado com .shift() — muito mais eficiente que loops Python.
+      • Gap = diferença entre hora_inicio de eventos consecutivos do mesmo user/dia.
+      • O maior gap na faixa [40–60 min] do dia = almoço (excluído da ociosidade, 1 vez).
+      • Gaps > 60 min = ausências graves (contam como ociosidade).
+      • Turno efetivo = span total do dia − almoço.
+      • pct_ocioso limitado a 100%.
+    """
+    if df_in.empty or "hora_inicio" not in df_in.columns:
+        return pd.DataFrame(
+            columns=["user_name", "pct_ocioso", "maior_gap", "n_ausencias_graves"]
+        )
+
+    df_work = df_in[["user_name", "hora_inicio", "event_elapsed_time", "event_count"]].copy()
+
+    # hora_fim_real = inicio + (n_eventos × tempo_médio_por_evento)
+    # Desconta o tempo efetivo de trabalho do gap, evitando que o processamento
+    # seja contabilizado como ociosidade.
+    elapsed_total_s = (
+        df_work["event_elapsed_time"].fillna(0).clip(lower=0) *
+        df_work["event_count"].fillna(1).clip(lower=1)
+    )
+    df_work["_hora_fim_real"] = df_work["hora_inicio"] + pd.to_timedelta(elapsed_total_s, unit="s")
+
+    df_work["_date"] = df_work["hora_inicio"].dt.normalize()
+    df_work = df_work.sort_values(["user_name", "_date", "hora_inicio"])
+
+    # gap = início do próximo evento − fim real do evento atual (≥ 0)
+    df_work["_next_inicio"] = df_work.groupby(["user_name", "_date"])["hora_inicio"].shift(-1)
+    df_work["_gap_min"] = (
+        (df_work["_next_inicio"] - df_work["_hora_fim_real"]).dt.total_seconds() / 60
+    ).clip(lower=0)
+
+    rows = []
+    for (user, date), grp in df_work.groupby(["user_name", "_date"]):
+        # turno vai do início do primeiro evento ao fim real do último
+        turno_min = (
+            grp["_hora_fim_real"].max() - grp["hora_inicio"].min()
+        ).total_seconds() / 60
         if turno_min <= 0:
-            rows.append({"user_name": user, "pct_ocioso": 0.0, "maior_gap": 0.0})
             continue
 
-        # Todos os gaps positivos entre eventos consecutivos
-        gaps = []
-        for i in range(len(grp) - 1):
-            delta = (grp.loc[i + 1, "hora_inicio"] - grp.loc[i, "hora_fim"]).total_seconds() / 60
-            if delta > 0:
-                gaps.append(round(delta, 1))
+        gaps = grp["_gap_min"].dropna()
+        gaps = gaps[gaps > 0].tolist()
 
         if not gaps:
-            rows.append({"user_name": user, "pct_ocioso": 0.0, "maior_gap": 0.0})
+            rows.append({"user_name": user, "pct_ocioso": 0.0,
+                         "maior_gap": 0.0, "n_ausencias_graves": 0})
             continue
 
-        # Remove o maior gap se for ≥ 45 min (almoço / pausa longa)
         gaps_sorted = sorted(gaps, reverse=True)
-        if gaps_sorted[0] >= 45:
-            gaps_intra = gaps_sorted[1:]   # exclui o almoço
-        else:
-            gaps_intra = gaps_sorted
+        # Almoço: maior gap na faixa [40–60 min], descartado 1 vez por dia
+        almoco_min, gaps_intra = _identificar_almoco(gaps_sorted)
 
-        total_ocio = sum(gaps_intra)
-        maior_gap  = max(gaps_intra) if gaps_intra else 0.0
-        pct_ocioso = round((total_ocio / turno_min) * 100, 1)
+        turno_efetivo      = max(turno_min - almoco_min, 1.0)
+        # Apenas gaps >= GAP_OCIOSO_MIN contam como ociosidade real;
+        # gaps menores são ritmo normal de trabalho (ciclo, deslocamento).
+        total_ocio         = sum(g for g in gaps_intra if g >= GAP_OCIOSO_MIN)
+        maior_gap          = max(gaps_intra) if gaps_intra else 0.0
+        pct_ocioso         = min(round((total_ocio / turno_efetivo) * 100, 1), 100.0)
+        # Ausência grave: gap > 60 min que NÃO foi o almoço
+        n_ausencias_graves = sum(1 for g in gaps_intra if g > ALMOCO_MIN_MAX)
 
         rows.append({
-            "user_name":  user,
-            "pct_ocioso": pct_ocioso,
-            "maior_gap":  round(maior_gap, 1),
+            "user_name":          user,
+            "pct_ocioso":         pct_ocioso,
+            "maior_gap":          round(maior_gap, 1),
+            "n_ausencias_graves": n_ausencias_graves,
         })
-    return pd.DataFrame(rows) if rows else pd.DataFrame(
-        columns=["user_name", "pct_ocioso", "maior_gap"]
+
+    if not rows:
+        return pd.DataFrame(
+            columns=["user_name", "pct_ocioso", "maior_gap", "n_ausencias_graves"]
+        )
+
+    df_r = pd.DataFrame(rows)
+    return (
+        df_r.groupby("user_name")
+        .agg(
+            pct_ocioso         =("pct_ocioso",         "mean"),
+            maior_gap          =("maior_gap",           "mean"),
+            n_ausencias_graves =("n_ausencias_graves",  "sum"),
+        )
+        .round({"pct_ocioso": 1, "maior_gap": 1})
+        .reset_index()
     )
+
+# =========================================================
+# ⏸️ OCIOSIDADE DIÁRIA — detalhamento por dia para o feedback
+# =========================================================
+def calc_ociosidade_diaria(df_in: pd.DataFrame, user_name: str) -> pd.DataFrame:
+    """
+    Retorna detalhamento de ociosidade dia a dia para um usuário, usando
+    hora_inicio exato (de time_key). Usado na aba de Feedback.
+
+    Colunas retornadas:
+      data, primeiro_evento, ultimo_evento, turno_min,
+      pct_ocioso, maior_gap, total_ocio_min,
+      almoco_min, n_ausencias_graves, gaps_detalhe
+    """
+    cols = [
+        "data", "primeiro_evento", "ultimo_evento", "turno_min",
+        "pct_ocioso", "maior_gap", "total_ocio_min",
+        "almoco_min", "n_ausencias_graves", "gaps_detalhe",
+    ]
+    df_u = df_in[df_in["user_name"] == user_name].copy()
+    if df_u.empty or "hora_inicio" not in df_u.columns:
+        return pd.DataFrame(columns=cols)
+
+    elapsed_total_s = (
+        df_u["event_elapsed_time"].fillna(0).clip(lower=0) *
+        df_u["event_count"].fillna(1).clip(lower=1)
+    )
+    df_u["_hora_fim_real"] = df_u["hora_inicio"] + pd.to_timedelta(elapsed_total_s, unit="s")
+
+    df_u["_date"] = df_u["hora_inicio"].dt.normalize()
+    df_u = df_u.sort_values(["_date", "hora_inicio"])
+    df_u["_next"] = df_u.groupby("_date")["hora_inicio"].shift(-1)
+    df_u["_gap_min"] = (
+        (df_u["_next"] - df_u["_hora_fim_real"]).dt.total_seconds() / 60
+    ).clip(lower=0)
+
+    rows = []
+    for dia, grp in df_u.groupby("_date"):
+        turno_min = (
+            grp["_hora_fim_real"].max() - grp["hora_inicio"].min()
+        ).total_seconds() / 60
+        if turno_min <= 0:
+            continue
+
+        primeiro = grp["hora_inicio"].min()
+        ultimo   = grp["hora_inicio"].max()
+
+        gaps = grp["_gap_min"].dropna()
+        gaps = gaps[gaps > 0].tolist()
+
+        if not gaps:
+            rows.append({
+                "data": dia, "primeiro_evento": primeiro, "ultimo_evento": ultimo,
+                "turno_min": round(turno_min, 1),
+                "pct_ocioso": 0.0, "maior_gap": 0.0, "total_ocio_min": 0.0,
+                "almoco_min": 0.0, "n_ausencias_graves": 0, "gaps_detalhe": "—",
+            })
+            continue
+
+        gaps_sorted = sorted(gaps, reverse=True)
+        # Almoço: maior gap na faixa [40–60 min], descartado 1 vez por dia
+        almoco_min, gaps_intra = _identificar_almoco(gaps_sorted)
+
+        turno_efetivo      = max(turno_min - almoco_min, 1.0)
+        total_ocio         = sum(g for g in gaps_intra if g >= GAP_OCIOSO_MIN)
+        maior_gap          = max(gaps_intra) if gaps_intra else 0.0
+        pct_ocioso         = min(round((total_ocio / turno_efetivo) * 100, 1), 100.0)
+        n_ausencias_graves = sum(1 for g in gaps_intra if g > ALMOCO_MIN_MAX)
+
+        gaps_visiveis = sorted([g for g in gaps_intra if g > 5], reverse=True)
+        if gaps_visiveis:
+            gaps_detalhe = ", ".join(f"{g:.0f} min" for g in gaps_visiveis[:6])
+            if len(gaps_visiveis) > 6:
+                gaps_detalhe += f" (+{len(gaps_visiveis) - 6} menores)"
+        else:
+            gaps_detalhe = "Nenhum gap > 5 min"
+
+        rows.append({
+            "data":               dia,
+            "primeiro_evento":    primeiro,
+            "ultimo_evento":      ultimo,
+            "turno_min":          round(turno_min, 1),
+            "pct_ocioso":         pct_ocioso,
+            "maior_gap":          round(maior_gap, 1),
+            "total_ocio_min":     round(total_ocio, 1),
+            "almoco_min":         round(almoco_min, 1),
+            "n_ausencias_graves": n_ausencias_graves,
+            "gaps_detalhe":       gaps_detalhe,
+        })
+
+    if not rows:
+        return pd.DataFrame(columns=cols)
+
+    return pd.DataFrame(rows).sort_values("data").reset_index(drop=True)
+
 
 df_ocio         = calc_ociosidade(df)
 ocio_pct_geral  = round(df_ocio["pct_ocioso"].mean(), 1)  if not df_ocio.empty else 0.0
@@ -663,8 +941,18 @@ max_time = df_user["event_elapsed_time"].max() or 1
 
 df_user["score_volume"] = df_user["event_count"]        / max_vol
 df_user["score_tempo"]  = 1 - (df_user["event_elapsed_time"] / max_time)
-df_user["score"]        = df_user["score_volume"] * peso_volume + df_user["score_tempo"] * peso_tempo
-df_user["%meta"]        = df_user["event_count"] / META_TOTAL
+
+# Incorpora ociosidade: 0% ocioso → score_ocio = 1.0 | 100% ocioso → 0.0
+df_user = df_user.merge(df_ocio[["user_name", "pct_ocioso"]], on="user_name", how="left")
+df_user["pct_ocioso"] = df_user["pct_ocioso"].fillna(0)
+df_user["score_ocio"] = 1 - (df_user["pct_ocioso"] / 100)
+
+df_user["score"]  = (
+    df_user["score_volume"] * peso_volume
+    + df_user["score_tempo"]  * peso_tempo
+    + df_user["score_ocio"]   * peso_ocio
+)
+df_user["%meta"]  = df_user["event_count"] / META_TOTAL
 
 # =========================================================
 # 🧱 GARGALO
@@ -707,6 +995,7 @@ with tab1:
         )
         fig_vol.add_hline(y=media, line_dash="dash", line_color=COLORS["text_muted"],
                           annotation_text="Média", annotation_font_color=COLORS["text_muted"])
+        fig_vol.update_layout(xaxis=dict(tickangle=-35, tickfont=dict(size=11)))
         st.plotly_chart(style_fig(fig_vol, 380), use_container_width=True)
 
     with col2:
@@ -731,10 +1020,20 @@ with tab1:
 
     section("⏸️ Análise de Ociosidade por Usuário")
     st.caption(
-        "O maior gap diário (≥ 45 min) é descartado automaticamente como almoço/pausa longa. "
-        "Apenas intervalos intra-turno são contabilizados."
+        f"Apenas gaps ≥ {GAP_OCIOSO_MIN} min contam como ociosidade (gaps menores = ritmo de trabalho). "
+        "Almoço: gap entre 40–60 min, descartado 1 vez/dia. "
+        "Gaps > 60 min = ausência grave."
     )
     if not df_ocio.empty:
+        # Ausências graves: gaps > 60 min que NÃO foram o almoço
+        total_ausencias = int(df_ocio["n_ausencias_graves"].sum()) if "n_ausencias_graves" in df_ocio.columns else 0
+        if total_ausencias > 0:
+            s = "s" if total_ausencias > 1 else ""
+            st.warning(
+                f"⚠️ {total_ausencias} ausência{s} grave{s} detectada{s} no período "
+                f"(gap > 60 min além do almoço — ausência não justificada). "
+                f"Use a aba Jornada para ver o dia/horário exato."
+            )
 
         def cor_pct(v):
             if v > 20: return COLORS["danger"]
@@ -750,21 +1049,24 @@ with tab1:
 
         with col_o1:
             st.markdown(f'<div style="font-size:0.88rem;font-weight:600;color:{COLORS["text"]};margin-bottom:4px;">% do Turno Ocioso</div>', unsafe_allow_html=True)
-            st.caption("Quanto do horário de trabalho ficou sem registro de eventos")
+            st.caption("Quanto do horário de trabalho ficou sem registro de eventos (média diária por usuário)")
             df_pct = df_ocio.sort_values("pct_ocioso", ascending=False)
+            _pct_ymax = max(df_pct["pct_ocioso"].max() * 1.2, 10) if not df_pct.empty else 10
             fig_pct = go.Figure(go.Bar(
                 x=df_pct["user_name"],
                 y=df_pct["pct_ocioso"],
                 marker_color=[cor_pct(v) for v in df_pct["pct_ocioso"]],
                 text=df_pct["pct_ocioso"].apply(lambda v: f"{v}%"),
                 textposition="outside",
+                cliponaxis=False,
             ))
             fig_pct.add_hline(
                 y=ocio_pct_geral, line_dash="dash", line_color=COLORS["text_muted"],
                 annotation_text=f"Média: {ocio_pct_geral}%",
                 annotation_font_color=COLORS["text_muted"],
             )
-            fig_pct.update_layout(xaxis_title="", yaxis_title="% ocioso")
+            fig_pct.update_layout(xaxis_title="", yaxis_title="% ocioso",
+                                  yaxis=dict(range=[0, _pct_ymax]))
             st.plotly_chart(style_fig(fig_pct, 340), use_container_width=True)
             leg1, leg2, leg3 = st.columns(3)
             leg1.markdown(f'<span style="color:{COLORS["success"]}; font-weight:600;">● ≤ 10%</span> Ótimo', unsafe_allow_html=True)
@@ -772,22 +1074,25 @@ with tab1:
             leg3.markdown(f'<span style="color:{COLORS["danger"]}; font-weight:600;">● > 20%</span> Crítico', unsafe_allow_html=True)
 
         with col_o2:
-            st.markdown(f'<div style="font-size:0.88rem;font-weight:600;color:{COLORS["text"]};margin-bottom:4px;">Maior Gap Intra-turno (min)</div>', unsafe_allow_html=True)
-            st.caption("Maior intervalo pontual sem nenhum evento registrado")
+            st.markdown(f'<div style="font-size:0.88rem;font-weight:600;color:{COLORS["text"]};margin-bottom:4px;">Gap Máximo Médio por Usuário (min)</div>', unsafe_allow_html=True)
+            st.caption("Média do maior gap intra-turno por dia — almoço (40–60 min) excluído")
             df_gap = df_ocio.sort_values("maior_gap", ascending=False)
+            _gap_ymax = max(df_gap["maior_gap"].max() * 1.2, 10) if not df_gap.empty else 10
             fig_gap = go.Figure(go.Bar(
                 x=df_gap["user_name"],
                 y=df_gap["maior_gap"],
                 marker_color=[cor_gap(v) for v in df_gap["maior_gap"]],
                 text=df_gap["maior_gap"].apply(lambda v: f"{v} min"),
                 textposition="outside",
+                cliponaxis=False,
             ))
             fig_gap.add_hline(
                 y=ocio_gap_geral, line_dash="dash", line_color=COLORS["text_muted"],
                 annotation_text=f"Média: {ocio_gap_geral} min",
                 annotation_font_color=COLORS["text_muted"],
             )
-            fig_gap.update_layout(xaxis_title="", yaxis_title="minutos")
+            fig_gap.update_layout(xaxis_title="", yaxis_title="minutos",
+                                  yaxis=dict(range=[0, _gap_ymax]))
             st.plotly_chart(style_fig(fig_gap, 340), use_container_width=True)
             leg4, leg5, leg6 = st.columns(3)
             leg4.markdown(f'<span style="color:{COLORS["success"]}; font-weight:600;">● ≤ 15 min</span> Ótimo', unsafe_allow_html=True)
@@ -838,51 +1143,235 @@ with tab2:
             df_user, x="event_elapsed_time", y="event_count",
             size="event_count", color="score",
             color_continuous_scale=[[0, COLORS["danger"]], [0.5, COLORS["warning"]], [1, COLORS["success"]]],
-            hover_name="user_name",
+            hover_name="user_name", text="user_name",
             labels={"event_elapsed_time": "Tempo médio (s)", "event_count": "Eventos"},
         )
+        fig_sc.update_traces(textposition="top center", textfont=dict(size=10, color=COLORS["text_muted"]))
         st.plotly_chart(style_fig(fig_sc, 360), use_container_width=True)
 
 # ----- TAB 3: JORNADA -----
 with tab3:
-    section("Jornada dos Usuários")
+    section("Resumo de Jornada por Usuário × Dia")
 
     df_turno = df.copy()
-    df_turno["gap"] = df_turno.groupby("user_name")["hora_inicio"].diff()
-    df_turno["novo_bloco"] = df_turno["gap"].isna() | (df_turno["gap"].dt.total_seconds() > 3600)
+    df_turno["_date"] = df_turno["hora_inicio"].dt.normalize()
 
-    inicio = df_turno[df_turno["novo_bloco"]].groupby("user_name")["hora_inicio"].min().reset_index()
-    fim    = df_turno.groupby("user_name")["hora_fim"].max().reset_index()
-    turno  = inicio.merge(fim, on="user_name")
-    turno["duracao_h"] = ((turno["hora_fim"] - turno["hora_inicio"]).dt.total_seconds() / 3600).round(2)
+    # ── Calcula gaps por (user, dia) de forma vetorizada ──
+    df_turno_s = df_turno.sort_values(["user_name", "_date", "hora_inicio"])
 
-    turno_fmt = turno.copy()
-    turno_fmt["Início"]     = turno_fmt["hora_inicio"].dt.strftime("%H:%M")
-    turno_fmt["Fim"]        = turno_fmt["hora_fim"].dt.strftime("%H:%M")
-    turno_fmt = turno_fmt.rename(columns={"user_name": "Usuário", "duracao_h": "Duração (h)"})
+    _et_s = (
+        df_turno_s["event_elapsed_time"].fillna(0).clip(lower=0) *
+        df_turno_s["event_count"].fillna(1).clip(lower=1)
+    )
+    df_turno_s["_hora_fim_real"] = df_turno_s["hora_inicio"] + pd.to_timedelta(_et_s, unit="s")
+
+    df_turno_s["_next"] = df_turno_s.groupby(["user_name", "_date"])["hora_inicio"].shift(-1)
+    df_turno_s["_gap"]  = (
+        (df_turno_s["_next"] - df_turno_s["_hora_fim_real"]).dt.total_seconds() / 60
+    ).clip(lower=0)
+
+    # Agrega por user/dia: primeiro/ultimo baseados em hora_inicio para exibição;
+    # duracao inclui o processamento do último evento (_hora_fim_real)
+    turno_grp = df_turno_s.groupby(["user_name", "_date"]).agg(
+        primeiro=("hora_inicio",     "min"),
+        ultimo=  ("hora_inicio",     "max"),
+        _fim_real=("_hora_fim_real", "max"),
+    ).reset_index()
+    turno_grp["duracao_min"] = (
+        (turno_grp["_fim_real"] - turno_grp["primeiro"]).dt.total_seconds() / 60
+    ).round(1)
+
+    # Maior gap e total ocioso por user/dia (almoço = faixa 40–60 min, 1 vez)
+    def _resumo_gaps(grp):
+        gs = grp["_gap"].dropna()
+        gs = gs[gs > 0].tolist()
+        if not gs:
+            return pd.Series({"almoco_min": 0.0, "total_ocio_min": 0.0, "maior_gap_min": 0.0})
+        gs_s = sorted(gs, reverse=True)
+        alm, intra = _identificar_almoco(gs_s)
+        return pd.Series({
+            "almoco_min":     round(alm, 1),
+            "total_ocio_min": round(sum(g for g in intra if g >= GAP_OCIOSO_MIN), 1),
+            "maior_gap_min":  round(max(intra) if intra else 0.0, 1),
+        })
+
+    gap_resumo = df_turno_s.groupby(["user_name", "_date"]).apply(
+        _resumo_gaps, include_groups=False
+    ).reset_index()
+    turno_grp = turno_grp.merge(gap_resumo, on=["user_name", "_date"], how="left")
+    turno_grp["pct_ocioso"] = (
+        turno_grp["total_ocio_min"]
+        / (turno_grp["duracao_min"] - turno_grp["almoco_min"]).clip(lower=1)
+        * 100
+    ).clip(upper=100).round(1)
+
+    fmt = "%H:%M:%S" if "time_key" in df.columns else "%H:%M"
+    turno_fmt = turno_grp.copy()
+    turno_fmt["Usuário"]       = turno_fmt["user_name"]
+    turno_fmt["Data"]          = turno_fmt["_date"].dt.strftime("%d/%m/%Y")
+    turno_fmt["1º Evento"]     = turno_fmt["primeiro"].dt.strftime(fmt)
+    turno_fmt["Último Evento"] = turno_fmt["ultimo"].dt.strftime(fmt)
+    turno_fmt["Duração"]       = turno_fmt["duracao_min"].apply(
+        lambda v: f"{int(v//60)}h{int(v%60):02d}min"
+    )
+    turno_fmt["Almoço (min)"]     = turno_fmt["almoco_min"].apply(
+        lambda v: f"{v:.0f}" if v > 0 else "—"
+    )
+    turno_fmt["Ocioso (min)"]     = turno_fmt["total_ocio_min"]
+    turno_fmt["Maior Gap (min)"]  = turno_fmt["maior_gap_min"]
+    turno_fmt["% Ocioso"]         = turno_fmt["pct_ocioso"].apply(lambda v: f"{v}%")
+
+    # Filtros da tabela de jornada
+    _jorn_users = st.multiselect(
+        "Filtrar usuários (jornada)", sorted(df["user_name"].unique()),
+        placeholder="Todos", key="jorn_users",
+    )
+    _jorn_mask = turno_fmt["Usuário"].isin(_jorn_users) if _jorn_users else slice(None)
     st.dataframe(
-        turno_fmt[["Usuário", "Início", "Fim", "Duração (h)"]],
+        turno_fmt.loc[_jorn_mask, [
+            "Usuário", "Data", "1º Evento", "Último Evento",
+            "Duração", "Almoço (min)", "Ocioso (min)", "Maior Gap (min)", "% Ocioso"
+        ]].sort_values(["Usuário", "Data"]),
         use_container_width=True, hide_index=True,
     )
+    csv_jorn = turno_fmt[[
+        "Usuário", "Data", "1º Evento", "Último Evento",
+        "Duração", "Almoço (min)", "Ocioso (min)", "Maior Gap (min)", "% Ocioso"
+    ]].to_csv(index=False).encode("utf-8")
+    st.download_button("⬇️ Exportar Jornada CSV", csv_jorn, "jornada.csv", "text/csv")
 
-    section("Timeline Individual")
-    usuario_timeline = st.selectbox("Selecione um usuário", sorted(df["user_name"].unique()))
-    df_tl = df[df["user_name"] == usuario_timeline].copy()
-
-    fig_tl = px.timeline(
-        df_tl, x_start="hora_inicio", x_end="hora_fim",
-        y="event_type_name", color="event_count",
-        color_continuous_scale=[[0, COLORS["primary"]], [1, COLORS["accent"]]],
-        hover_data=["event_count", "event_elapsed_time"],
+    st.markdown("---")
+    section("Timeline de Atividade — por Usuário e Dia")
+    st.caption(
+        "Selecione um usuário e um dia específico. "
     )
-    fig_tl.update_yaxes(autorange="reversed")
-    st.plotly_chart(style_fig(fig_tl, 420), use_container_width=True)
+
+    col_tl1, col_tl2 = st.columns([2, 2])
+    with col_tl1:
+        usuario_timeline = st.selectbox(
+            "Usuário", sorted(df["user_name"].unique()), key="tl_user"
+        )
+    with col_tl2:
+        # Datas disponíveis para o usuário selecionado
+        _datas_user = sorted(
+            df[df["user_name"] == usuario_timeline]["hora_inicio"]
+            .dt.normalize().dt.date.unique()
+        )
+        dia_timeline = st.selectbox(
+            "Dia", _datas_user,
+            format_func=lambda d: d.strftime("%d/%m/%Y"),
+            key="tl_date",
+        )
+
+    # Filtra somente o dia selecionado
+    _dia_ts   = pd.Timestamp(dia_timeline)
+    df_tl     = df[
+        (df["user_name"] == usuario_timeline) &
+        (df["hora_inicio"].dt.normalize() == _dia_ts)
+    ].copy().sort_values("hora_inicio").reset_index(drop=True)
+
+    if df_tl.empty:
+        st.info("Nenhum evento encontrado para esse usuário nesse dia.")
+    else:
+        # hora_fim_real = descontando o tempo de processamento dos eventos
+        _tl_elapsed_s = (
+            df_tl["event_elapsed_time"].fillna(0).clip(lower=0) *
+            df_tl["event_count"].fillna(1).clip(lower=1)
+        )
+        df_tl["_hora_fim_real"] = df_tl["hora_inicio"] + pd.to_timedelta(_tl_elapsed_s, unit="s")
+        df_tl["_next_inicio"]   = df_tl["hora_inicio"].shift(-1)
+
+        # gap = início do próximo evento − fim real do evento atual (≥ 0)
+        df_tl["_gap_min"] = (
+            (df_tl["_next_inicio"] - df_tl["_hora_fim_real"]).dt.total_seconds() / 60
+        ).clip(lower=0)
+
+        # Métricas do dia
+        _gaps_dia = df_tl["_gap_min"].dropna()
+        _gaps_pos = _gaps_dia[_gaps_dia > 0].tolist()
+        if _gaps_pos:
+            _gs = sorted(_gaps_pos, reverse=True)
+            _alm, _intra = _identificar_almoco(_gs)
+        else:
+            _alm, _intra = 0.0, []
+        _turno    = (df_tl["_hora_fim_real"].max() - df_tl["hora_inicio"].min()).total_seconds() / 60
+        _ocio_tot = sum(g for g in _intra if g >= GAP_OCIOSO_MIN)
+        _tef      = max(_turno - _alm, 1.0)
+        _pct_ocio = min(round(_ocio_tot / _tef * 100, 1), 100.0)
+        _maior    = max(_intra) if _intra else 0.0
+        _n_aus    = sum(1 for g in _intra if g > ALMOCO_MIN_MAX)
+
+        mk1, mk2, mk3, mk4 = st.columns(4)
+        mk1.metric("🕐 1º Evento",  df_tl["hora_inicio"].min().strftime(fmt))
+        mk2.metric("🕔 Último",     df_tl["hora_inicio"].max().strftime(fmt))
+        mk3.metric("⏸️ % Ocioso",   f"{_pct_ocio}%")
+        mk4.metric("⚠️ Maior Gap",  f"{_maior:.0f} min")
+
+        # ── Timeline Gantt ──────────────────────────────────────────
+        fig_tl = px.timeline(
+            df_tl, x_start="hora_inicio", x_end="hora_fim",
+            y="event_type_name", color="event_count",
+            color_continuous_scale=[[0, COLORS["primary"]], [1, COLORS["accent"]]],
+            hover_data=["event_count", "event_elapsed_time", "_gap_min"],
+            labels={"_gap_min": "Gap até próx. (min)"},
+        )
+        fig_tl.update_yaxes(autorange="reversed")
+
+        # Adiciona vrect somente para gaps significativos (> 15 min)
+        # x0 = fim real do evento (após descontar processamento), x1 = início do próximo
+        _danger_r  = f"rgba({int(COLORS['danger'][1:3],16)},{int(COLORS['danger'][3:5],16)},{int(COLORS['danger'][5:7],16)},0.20)"
+        _warn_r    = f"rgba({int(COLORS['warning'][1:3],16)},{int(COLORS['warning'][3:5],16)},{int(COLORS['warning'][5:7],16)},0.15)"
+        _neutral_r = "rgba(120,120,120,0.10)"
+
+        for i, row in df_tl[df_tl["_gap_min"] > 15].iterrows():
+            g = row["_gap_min"]
+            x0 = row["_hora_fim_real"]
+            x1 = row["_next_inicio"]
+            if pd.isna(x1):
+                continue
+            if _alm > 0 and g == _alm:
+                fc, lbl = _neutral_r, f"🍽 Almoço: {g:.0f} min"
+            elif g > ALMOCO_MIN_MAX:
+                fc, lbl = _danger_r, f"🔴 Ausência: {g:.0f} min"
+            else:
+                fc, lbl = _warn_r, f"🟡 Gap: {g:.0f} min"
+            fig_tl.add_vrect(
+                x0=x0, x1=x1, fillcolor=fc, line_width=0,
+                annotation_text=lbl, annotation_font_size=9,
+                annotation_font_color=COLORS["text_muted"],
+            )
+
+        st.plotly_chart(style_fig(fig_tl, 440), use_container_width=True)
+
+        # Tabela de gaps do dia
+        if _gaps_pos:
+            with st.expander("📋 Gaps detectados neste dia"):
+                _gap_rows = []
+                for i, row in df_tl[df_tl["_gap_min"].notna()].iterrows():
+                    g = row["_gap_min"]
+                    if g <= 0: continue
+                    tipo = "🍽 Almoço"   if (_alm > 0 and g == _alm)  else \
+                           "🔴 Ausência" if g > ALMOCO_MIN_MAX          else \
+                           "🟡 Atenção"  if g >= 15                     else \
+                           "✅ Normal"
+                    _gap_rows.append({
+                        "Início": row["hora_inicio"].strftime(fmt),
+                        "Retorno": row["_next_inicio"].strftime(fmt) if pd.notna(row["_next_inicio"]) else "—",
+                        "Gap (min)": round(g, 1),
+                        "Classificação": tipo,
+                    })
+                if _gap_rows:
+                    st.dataframe(
+                        pd.DataFrame(_gap_rows).sort_values("Gap (min)", ascending=False),
+                        use_container_width=True, hide_index=True,
+                    )
 
 # ----- TAB 4: DADOS -----
 with tab4:
     section("Base de Dados Filtrada")
     st.caption(f"{len(df):,} registros".replace(",", "."))
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    colunas_visiveis = [c for c in df.columns if c not in ("hora_inicio", "hora_fim", "_date")]
+    st.dataframe(df[colunas_visiveis], use_container_width=True, hide_index=True)
 
     csv = df.to_csv(index=False).encode("utf-8")
     st.download_button("⬇️ Baixar CSV", csv, "dados_filtrados.csv", "text/csv")
@@ -919,18 +1408,21 @@ with tab5:
     with st.expander("⏸️ KPIs de Ociosidade — Linha 2"):
         st.markdown(
             """
-            Calculados automaticamente para toda a equipe. O maior gap diário de cada
-            usuário (≥ 45 min) é descartado como almoço ou pausa longa.
+            Calculados automaticamente para toda a equipe.
+            O **maior gap entre 40 e 60 min** de cada dia é descartado como almoço (uma vez por dia).
+            Gaps **> 60 min** no mesmo dia são tratados como **ausência grave** e contam
+            como ociosidade real. O % é calculado sobre o **turno efetivo** (total − almoço).
 
             - **% Tempo Ocioso** — Percentual médio do turno sem nenhum evento registrado.
-              Fórmula: `soma dos gaps intra-turno ÷ duração total do turno × 100`.
+              Fórmula: `soma dos gaps intra-turno ÷ turno efetivo × 100`.
                 - 🟢 ≤ 10%: Ótimo · 🟡 10–20%: Atenção · 🔴 > 20%: Crítico.
-            - **Maior Gap Médio** — Média do maior intervalo pontual sem evento por usuário.
+            - **Gap Máximo Médio** — Média do maior gap intra-turno por dia por usuário (almoço excluído).
               Útil para detectar ausências prolongadas durante o expediente.
                 - 🟢 ≤ 15 min: Ótimo · 🟡 15–30 min: Atenção · 🔴 > 30 min: Crítico.
 
-            > A linha **📅 Meta do período** exibida abaixo mostra o cálculo automático
-            > da meta total: `meta diária × dias úteis no período` (domingos excluídos).
+            > Se forem detectadas **ausências graves** (gaps > 60 min fora do almoço),
+            > um aviso em amarelo aparece acima dos gráficos de ociosidade.
+            > Use a **Timeline Individual** (Aba Jornada) para identificar o horário exato.
             """
         )
 
@@ -949,9 +1441,9 @@ with tab5:
               *quando*. Cores mais intensas = maior volume. Identifica rapidamente
               concentração de esforço e lacunas de cobertura.
             - **Análise de Ociosidade** — Dois gráficos lado a lado:
-                - **% do Turno Ocioso**: proporção do expediente sem evento por usuário.
-                - **Maior Gap Intra-turno**: maior ausência pontual de cada pessoa.
-              Ambos excluem automaticamente o almoço (gap ≥ 45 min).
+                - **% do Turno Ocioso**: proporção do expediente sem evento por usuário (média diária).
+                - **Gap Máximo Médio**: média do maior gap intra-turno por dia por usuário.
+              Ambos excluem automaticamente o almoço (gap entre 40–60 min, 1 vez por dia).
             """
         )
 
@@ -959,16 +1451,16 @@ with tab5:
         st.markdown(
             """
             - **Score de Performance** — Indicador composto, normalizado de 0 a 100%:
-              `Score = Peso Volume × (volume normalizado) + Peso Tempo × (1 − tempo normalizado)`
+              `Score = Peso Volume × (volume normalizado) + Peso Velocidade × (1 − tempo normalizado) + Peso Ociosidade × (1 − % ocioso)`
               Os pesos são configuráveis na sidebar em **⚖️ Pesos do Score**.
-              Premia quem entrega **mais volume** com **menor tempo médio**.
+              Premia quem entrega **mais volume** com **menor tempo médio** e **menor ociosidade**.
                 - 🟢 Verde: alto desempenho · 🟡 Amarelo: médio · 🔴 Vermelho: requer atenção.
             - **Atingimento da Meta (%)** — Compara o volume de cada usuário com a
               **meta do período** (diária × dias úteis). A linha de referência marca **100%**.
             - **Volume × Tempo Médio** — Dispersão para identificar perfis:
                 - Canto **superior-esquerdo**: alto volume e rápido (estrelas).
                 - Canto **inferior-direito**: baixo volume e lento (atenção).
-              O tamanho da bolha representa o volume; a cor, o score.
+              O tamanho da bolha representa o volume; a cor, o score. Os nomes aparecem sobre cada ponto.
             """
         )
 
@@ -980,8 +1472,11 @@ with tab5:
               há intervalo superior a **1 hora** entre eventos.
             - **Timeline Individual** — Linha do tempo detalhada das atividades de um
               usuário específico, separada por tipo de evento. A intensidade da cor
-              representa o volume de eventos em cada bloco. Ideal para **auditoria**
-              e análise de fluxo de trabalho individual.
+              representa o volume de eventos em cada bloco.
+              **Destaque visual de gaps:**
+                - 🟡 Faixa amarela: gap médio entre 15–30 min.
+                - 🔴 Faixa vermelha: gap crítico acima de 30 min.
+                - Faixa cinza: almoço detectado (40–60 min, excluído da contagem de ociosidade).
             """
         )
 
@@ -1057,7 +1552,7 @@ with tab6:
         usuario_fb   = st.selectbox("👤 Funcionário", sorted(df["user_name"].unique()), key="fb_user")
         gestor_nome  = st.text_input("🏢 Nome do Gestor", placeholder="Ex: João Silva")
     with col_fb2:
-        empresa_nome = st.text_input("🏷️ Empresa / Departamento", placeholder="Ex: Operações — Setor A")
+        empresa_nome = st.text_input("🏷️ Departamento", placeholder="Ex: Operações — Setor A")
         data_fb      = st.date_input("📅 Data do Feedback", value=pd.Timestamp.today())
 
     st.markdown("---")
@@ -1163,10 +1658,10 @@ with tab6:
         pb4.metric("🏅 Score",              f"{score_fb}%")
 
         pb5, pb6 = st.columns(2)
-        pb5.metric("⏸️ % Tempo Ocioso",    f"{ocio_pct_fb}%",
-                   help="% do turno sem registro de eventos (almoço excluído)")
-        pb6.metric("⚠️ Maior Gap Intra-turno", f"{ocio_gap_fb} min",
-                   help="Maior intervalo pontual sem evento (almoço excluído)")
+        pb5.metric("⏸️ % Tempo Ocioso (média)",    f"{ocio_pct_fb}%",
+                   help="Média diária do % do turno sem registro de eventos (almoço excluído)")
+        pb6.metric("⚠️ Maior Gap Médio (média)", f"{ocio_gap_fb} min",
+                   help="Média do maior gap intra-turno por dia (almoço excluído)")
 
         st.markdown(
             f'<div style="margin:10px 0 18px 0; padding:12px 18px; border-radius:10px; '
@@ -1176,6 +1671,153 @@ with tab6:
             f'</div>',
             unsafe_allow_html=True,
         )
+
+        # ── Detalhamento diário de ociosidade ───────────────────────
+        df_ocio_diario = calc_ociosidade_diaria(df_fb, usuario_fb)
+
+        if not df_ocio_diario.empty and "date" in df_fb.columns:
+            section("⏸️ Detalhamento Diário de Ociosidade")
+
+            # KPIs do pico
+            idx_pico   = df_ocio_diario["pct_ocioso"].idxmax()
+            dia_pico   = df_ocio_diario.loc[idx_pico, "data"]
+            pct_pico   = df_ocio_diario.loc[idx_pico, "pct_ocioso"]
+            gap_pico   = df_ocio_diario.loc[idx_pico, "maior_gap"]
+            dias_criticos  = int((df_ocio_diario["pct_ocioso"] > 20).sum())
+            dias_atencao   = int(((df_ocio_diario["pct_ocioso"] > 10) & (df_ocio_diario["pct_ocioso"] <= 20)).sum())
+            total_ausencias_fb = int(df_ocio_diario["n_ausencias_graves"].sum())
+
+            pk1, pk2, pk3, pk4 = st.columns(4)
+            pk1.metric("📅 Dia de Pico",
+                       dia_pico.strftime("%d/%m/%Y") if hasattr(dia_pico, "strftime") else str(dia_pico),
+                       help="Dia com maior % de ociosidade no período")
+            pk2.metric("🔴 % Ocioso no Pico",   f"{pct_pico}%")
+            pk3.metric("⚠️ Gap no Pico",        f"{gap_pico} min",
+                       help="Maior gap intra-turno no dia de pico")
+            pk4.metric("📆 Dias Críticos (>20%)", dias_criticos,
+                       help="Dias em que o % de ociosidade ficou acima de 20%")
+
+            if total_ausencias_fb > 0:
+                s = "s" if total_ausencias_fb > 1 else ""
+                st.warning(
+                    f"⚠️ {total_ausencias_fb} ausência{s} grave{s} detectada{s} no período "
+                    f"(gap > 60 min fora do horário de almoço)."
+                )
+
+            # Gráficos lado a lado
+            col_d1, col_d2 = st.columns(2)
+
+            with col_d1:
+                st.markdown(
+                    f'<div style="font-size:0.85rem;font-weight:600;color:{COLORS["text"]};margin-bottom:4px;">' +
+                    "% Ocioso por Dia</div>", unsafe_allow_html=True
+                )
+                def _cor_pct(v):
+                    if v > 20: return COLORS["danger"]
+                    if v > 10: return COLORS["warning"]
+                    return COLORS["success"]
+
+                _dpct_ymax = max(df_ocio_diario["pct_ocioso"].max() * 1.2, 25)
+                fig_dpct = go.Figure(go.Bar(
+                    x=df_ocio_diario["data"].dt.strftime("%d/%m"),
+                    y=df_ocio_diario["pct_ocioso"],
+                    marker_color=[_cor_pct(v) for v in df_ocio_diario["pct_ocioso"]],
+                    text=df_ocio_diario["pct_ocioso"].apply(lambda v: f"{v}%"),
+                    textposition="outside",
+                    cliponaxis=False,
+                    hovertemplate="<b>%{x}</b><br>% Ocioso: %{y}%<extra></extra>",
+                ))
+                fig_dpct.add_hline(y=10, line_dash="dot", line_color=COLORS["warning"],
+                                   annotation_text="Atenção (10%)",
+                                   annotation_font_color=COLORS["warning"])
+                fig_dpct.add_hline(y=20, line_dash="dash", line_color=COLORS["danger"],
+                                   annotation_text="Crítico (20%)",
+                                   annotation_font_color=COLORS["danger"])
+                fig_dpct.update_layout(xaxis_title="", yaxis_title="% ocioso",
+                                       xaxis=dict(tickangle=-35),
+                                       yaxis=dict(range=[0, _dpct_ymax]))
+                st.plotly_chart(style_fig(fig_dpct, 300), use_container_width=True)
+
+            with col_d2:
+                st.markdown(
+                    f'<div style="font-size:0.85rem;font-weight:600;color:{COLORS["text"]};margin-bottom:4px;">' +
+                    "Maior Gap por Dia (min)</div>", unsafe_allow_html=True
+                )
+                def _cor_gap(v):
+                    if v > 30: return COLORS["danger"]
+                    if v > 15: return COLORS["warning"]
+                    return COLORS["success"]
+
+                _dgap_ymax = max(df_ocio_diario["maior_gap"].max() * 1.2, 35)
+                fig_dgap = go.Figure(go.Bar(
+                    x=df_ocio_diario["data"].dt.strftime("%d/%m"),
+                    y=df_ocio_diario["maior_gap"],
+                    marker_color=[_cor_gap(v) for v in df_ocio_diario["maior_gap"]],
+                    text=df_ocio_diario["maior_gap"].apply(lambda v: f"{v:.0f}min"),
+                    textposition="outside",
+                    cliponaxis=False,
+                    hovertemplate="<b>%{x}</b><br>Gap: %{y} min<extra></extra>",
+                ))
+                fig_dgap.add_hline(y=15, line_dash="dot", line_color=COLORS["warning"],
+                                   annotation_text="Atenção (15 min)",
+                                   annotation_font_color=COLORS["warning"])
+                fig_dgap.add_hline(y=30, line_dash="dash", line_color=COLORS["danger"],
+                                   annotation_text="Crítico (30 min)",
+                                   annotation_font_color=COLORS["danger"])
+                fig_dgap.update_layout(xaxis_title="", yaxis_title="minutos",
+                                       xaxis=dict(tickangle=-35),
+                                       yaxis=dict(range=[0, _dgap_ymax]))
+                st.plotly_chart(style_fig(fig_dgap, 300), use_container_width=True)
+
+            # Tabela detalhada por dia
+            with st.expander("📋 Ver tabela completa por dia"):
+                df_tabela = df_ocio_diario.copy()
+                df_tabela["Data"]              = df_tabela["data"].dt.strftime("%d/%m/%Y")
+                # Horários exatos quando time_key disponível
+                fmt_t = "%H:%M:%S" if "time_key" in df_fb.columns else "%H:%M"
+                df_tabela["1º Evento"]         = df_tabela["primeiro_evento"].dt.strftime(fmt_t) if "primeiro_evento" in df_tabela.columns else "—"
+                df_tabela["Último Evento"]      = df_tabela["ultimo_evento"].dt.strftime(fmt_t) if "ultimo_evento" in df_tabela.columns else "—"
+                df_tabela["Duração Turno"]     = df_tabela["turno_min"].apply(
+                    lambda v: f"{int(v//60)}h{int(v%60):02d}min" if "turno_min" in df_tabela.columns else "—"
+                ) if "turno_min" in df_tabela.columns else "—"
+                df_tabela["% Ocioso"]          = df_tabela["pct_ocioso"].apply(lambda v: f"{v}%")
+                df_tabela["Maior Gap (min)"]   = df_tabela["maior_gap"].apply(lambda v: f"{v:.0f}")
+                df_tabela["Ocioso Total (min)"]= df_tabela["total_ocio_min"].apply(lambda v: f"{v:.0f}")
+                df_tabela["Almoço (min)"]      = df_tabela["almoco_min"].apply(
+                    lambda v: f"{v:.0f}" if v > 0 else "—"
+                )
+                df_tabela["Ausências Graves"]  = df_tabela["n_ausencias_graves"].apply(
+                    lambda v: f"⚠️ {v}" if v > 0 else "✅ 0"
+                )
+                df_tabela["Gaps Detectados"]   = df_tabela["gaps_detalhe"]
+                st.dataframe(
+                    df_tabela[[
+                        "Data", "1º Evento", "Último Evento", "Duração Turno",
+                        "% Ocioso", "Maior Gap (min)",
+                        "Ocioso Total (min)", "Almoço (min)",
+                        "Ausências Graves", "Gaps Detectados",
+                    ]],
+                    use_container_width=True, hide_index=True,
+                )
+                csv_ocio = df_tabela[[
+                    "Data", "1º Evento", "Último Evento", "Duração Turno",
+                    "% Ocioso", "Maior Gap (min)",
+                    "Ocioso Total (min)", "Almoço (min)",
+                    "Ausências Graves", "Gaps Detectados",
+                ]].to_csv(index=False).encode("utf-8")
+                st.download_button(
+                    "⬇️ Exportar CSV de Ociosidade",
+                    csv_ocio,
+                    f"ociosidade_{usuario_fb.replace(' ', '_')}.csv",
+                    "text/csv",
+                )
+
+            # Guarda variáveis para usar no HTML do relatório
+            _ocio_diario_html = df_ocio_diario  # referência para o bloco de impressão
+        else:
+            _ocio_diario_html = None
+            dias_criticos = 0
+            total_ausencias_fb = 0
 
         # ── Botão de gerar relatório ────────────────────────────────
         if st.button("🖨️ Gerar Relatório para Impressão", type="primary", key="btn_print"):
@@ -1198,6 +1840,86 @@ with tab6:
             html_obs = observacoes_gerais.strip() or "<em>Nenhuma observação registrada.</em>"
 
             total_ev_fb_fmt = f"{total_ev_fb:,}".replace(",", ".")
+
+            # ── Monta HTML da tabela de ociosidade diária ──────────
+            if _ocio_diario_html is not None and not _ocio_diario_html.empty:
+                def _cls_pct(v):
+                    if v > 20: return "td-crit"
+                    if v > 10: return "td-warn"
+                    return "td-ok"
+                def _cls_gap(v):
+                    if v > 30: return "td-crit"
+                    if v > 15: return "td-warn"
+                    return "td-ok"
+
+                _rows_html = ""
+                for _, r in _ocio_diario_html.iterrows():
+                    _data_str  = r["data"].strftime("%d/%m/%Y") if hasattr(r["data"], "strftime") else str(r["data"])
+                    _alm_str   = f"{r['almoco_min']:.0f} min" if r["almoco_min"] > 0 else "—"
+                    _aus_str   = f"⚠️ {int(r['n_ausencias_graves'])}" if r["n_ausencias_graves"] > 0 else "✅ 0"
+                    _fmt_t = "%H:%M:%S" if "time_key" in df_fb.columns else "%H:%M"
+                    _prim = r["primeiro_evento"].strftime(_fmt_t) if "primeiro_evento" in r.index and pd.notna(r["primeiro_evento"]) else "—"
+                    _ult  = r["ultimo_evento"].strftime(_fmt_t)   if "ultimo_evento"  in r.index and pd.notna(r["ultimo_evento"])  else "—"
+                    _rows_html += (
+                        f"<tr>"
+                        f"<td>{_data_str}</td>"
+                        f"<td style='font-size:10px;'>{_prim}</td>"
+                        f"<td style='font-size:10px;'>{_ult}</td>"
+                        f'<td class="{_cls_pct(r["pct_ocioso"])}">{r["pct_ocioso"]}%</td>'
+                        f'<td class="{_cls_gap(r["maior_gap"])}">{r["maior_gap"]:.0f} min</td>'
+                        f"<td>{r['total_ocio_min']:.0f} min</td>"
+                        f"<td>{_alm_str}</td>"
+                        f"<td>{_aus_str}</td>"
+                        f"<td style='text-align:left;font-size:10px;'>{r['gaps_detalhe']}</td>"
+                        f"</tr>"
+                    )
+
+                _pico_idx  = _ocio_diario_html["pct_ocioso"].idxmax()
+                _pico_data = _ocio_diario_html.loc[_pico_idx, "data"]
+                _pico_data_str = _pico_data.strftime("%d/%m/%Y") if hasattr(_pico_data, "strftime") else str(_pico_data)
+                _pico_pct  = _ocio_diario_html.loc[_pico_idx, "pct_ocioso"]
+                _dias_crit = int((_ocio_diario_html["pct_ocioso"] > 20).sum())
+                _dias_anal = len(_ocio_diario_html)
+
+                html_ocio_section = f"""
+<div class="section-title">⏸️ Detalhamento Diário de Ociosidade</div>
+<div class="ocio-summ">
+  <div class="ocio-summ-box">
+    <div class="os-label">Média % Ocioso</div>
+    <div class="os-value" style="color:{ocio_pct_color};">{ocio_pct_fb}%</div>
+    <div class="os-sub">{ocio_pct_label}</div>
+  </div>
+  <div class="ocio-summ-box">
+    <div class="os-label">Dia de Pico</div>
+    <div class="os-value">{_pico_data_str}</div>
+    <div class="os-sub">{_pico_pct}% ocioso nesse dia</div>
+  </div>
+  <div class="ocio-summ-box">
+    <div class="os-label">Dias Críticos (&gt;20%)</div>
+    <div class="os-value" style="color:{"#DC2626" if _dias_crit > 0 else "#16A34A"};">{_dias_crit} / {_dias_anal}</div>
+    <div class="os-sub">dias analisados</div>
+  </div>
+</div>
+<table class="ocio-table">
+  <thead>
+    <tr>
+      <th>Data</th>
+      <th>1º Evento</th>
+      <th>Último Evento</th>
+      <th>% Ocioso</th>
+      <th>Maior Gap</th>
+      <th>Total Ocioso</th>
+      <th>Almoço</th>
+      <th>Ausências</th>
+      <th>Gaps detectados (&gt;5 min)</th>
+    </tr>
+  </thead>
+  <tbody>
+    {_rows_html}
+  </tbody>
+</table>"""
+            else:
+                html_ocio_section = "<p style='color:#94A3B8;font-size:11px;'>Dados diários não disponíveis (sem coluna de data).</p>"
 
             html_report = f"""<!DOCTYPE html>
 <html lang="pt-BR">
@@ -1335,6 +2057,29 @@ with tab6:
     display: flex; justify-content: space-between;
   }}
 
+  /* ── Tabela de ociosidade diária ── */
+  .ocio-table {{ width: 100%; border-collapse: collapse; margin-bottom: 14px; font-size: 11px; }}
+  .ocio-table th {{
+    background: #EFF6FF; color: #1E40AF; font-weight: 700;
+    padding: 6px 8px; text-align: center; border: 1px solid #BFDBFE;
+    font-size: 10px; text-transform: uppercase; letter-spacing: .04em;
+  }}
+  .ocio-table td {{
+    padding: 5px 8px; border: 1px solid #E2E8F0; text-align: center; color: #374151;
+  }}
+  .ocio-table tr:nth-child(even) td {{ background: #F8FAFC; }}
+  .ocio-table .td-ok    {{ color: #16A34A; font-weight: 700; }}
+  .ocio-table .td-warn  {{ color: #D97706; font-weight: 700; }}
+  .ocio-table .td-crit  {{ color: #DC2626; font-weight: 700; }}
+  .ocio-summ {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px; }}
+  .ocio-summ-box {{
+    border: 1px solid #E2E8F0; border-radius: 6px; padding: 8px 12px;
+    text-align: center; background: #FAFAFA;
+  }}
+  .ocio-summ-box .os-label {{ font-size: 10px; color: #64748B; margin-bottom: 4px; font-weight: 600; }}
+  .ocio-summ-box .os-value {{ font-size: 15px; font-weight: 800; color: #1A202C; }}
+  .ocio-summ-box .os-sub   {{ font-size: 10px; color: #94A3B8; margin-top: 2px; }}
+
   /* ── Print ── */
   @media print {{
     body {{ padding: 10px 18px; }}
@@ -1409,12 +2154,12 @@ with tab6:
   <div class="kpi">
     <div class="kpi-label">⏸️ % do Turno Ocioso</div>
     <div class="kpi-value" style="color:{ocio_pct_color};">{ocio_pct_fb}%</div>
-    <div class="kpi-sub">{ocio_pct_label} · almoço/pausas longas excluídos</div>
+    <div class="kpi-sub">{ocio_pct_label} · média diária · almoço (40–60 min) excluído automaticamente</div>
   </div>
   <div class="kpi">
-    <div class="kpi-label">⚠️ Maior Gap Intra-turno</div>
+    <div class="kpi-label">⚠️ Maior Gap Médio</div>
     <div class="kpi-value" style="color:{ocio_gap_color};">{ocio_gap_fb} min</div>
-    <div class="kpi-sub">{ocio_gap_label} · maior intervalo pontual sem evento</div>
+    <div class="kpi-sub">{ocio_gap_label} · maior gap intra-turno por dia</div>
   </div>
 </div>
 
@@ -1426,6 +2171,9 @@ with tab6:
   </div>
   <div class="cl-rank">🏅 Ranking: {rank_fb}º de {total_uf} colaboradores</div>
 </div>
+
+<!-- OCIOSIDADE DIÁRIA -->
+{html_ocio_section}
 
 <!-- OBSERVAÇÕES -->
 <div class="section-title">Observações do Gestor</div>
